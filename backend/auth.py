@@ -90,16 +90,17 @@ async def get_session_user(request: Request):
         session_query = {"jwt_id": claims["jti"]}
 
     sess = await db.user_sessions.find_one(session_query, {"_id": 0})
-    if not sess:
+    if not sess and not claims:
         raise HTTPException(401, "Invalid session")
 
-    expires_at = sess["expires_at"]
-    if isinstance(expires_at, str):
-        expires_at = datetime.fromisoformat(expires_at)
-    if expires_at.tzinfo is None:
-        expires_at = expires_at.replace(tzinfo=timezone.utc)
-    if expires_at < utc_now():
-        raise HTTPException(401, "Session expired")
+    if sess:
+        expires_at = sess["expires_at"]
+        if isinstance(expires_at, str):
+            expires_at = datetime.fromisoformat(expires_at)
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        if expires_at < utc_now():
+            raise HTTPException(401, "Session expired")
 
     user_id = claims["sub"] if claims else sess["user_id"]
     user = await db.users.find_one({"user_id": user_id}, {"_id": 0, "password_hash": 0})

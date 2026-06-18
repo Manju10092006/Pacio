@@ -132,9 +132,10 @@ async def _create_session(user_id: str, response: Response, request: Request, to
 
 
 def _new_user(*, email: str, name: str, role: str, institution_id: Optional[str], password: Optional[str], approved: bool = True, department: Optional[str] = None) -> dict:
+    normalized_email = email.lower()
     return {
-        "user_id": f"user_{uuid.uuid4().hex[:12]}",
-        "email": email.lower(),
+        "user_id": f"user_{uuid.uuid5(uuid.NAMESPACE_DNS, normalized_email).hex[:12]}",
+        "email": normalized_email,
         "name": name,
         "role": role,
         "institution_id": institution_id,

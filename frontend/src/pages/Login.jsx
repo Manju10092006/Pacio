@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowUpRight, ArrowLeft, Lock, Mail } from "lucide-react";
-import { api } from "../lib/api";
+import { api, setAuthToken } from "../lib/api";
 import { useAuth } from "../App";
 import { toast } from "sonner";
 
@@ -47,6 +47,7 @@ export default function Login() {
     setBusy(true);
     try {
       const { data } = await api.post("/auth/login", { email, password });
+      setAuthToken(data.access_token);
       setUser(data.user);
       const home = ROLE_HOME[data.user.role] || "/";
       const target = data.user.approved || data.user.role === "super_admin" ? home : "/pending";

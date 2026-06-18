@@ -20,7 +20,8 @@ export default function StudentRoster() {
     setItems(data.items);
   };
 
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [dept, placed]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); }, [dept, placed]);
 
   const submit = async (e) => {
     e.preventDefault();

@@ -1,0 +1,9 @@
+{
+  "buildCommand": "cd frontend && npm install --no-package-lock && npm run build",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/api/index.py"
+    }
+  ]
+}

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useAuth } from "../App";
 import { api } from "../lib/api";
 import { toast } from "sonner";
@@ -7,7 +7,6 @@ import { ArrowRight } from "lucide-react";
 
 export default function OnboardingPending() {
   const { user, refresh } = useAuth();
-  const navigate = useNavigate();
   const [form, setForm] = useState({
     college_name: "",
     short_name: "",

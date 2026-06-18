@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { NavLink, Outlet, Link, useNavigate, useLocation } from "react-router-dom";
 import { LogOut, ArrowUpRight, Menu, X } from "lucide-react";
 import { useAuth } from "../App";
-import { api } from "../lib/api";
+import { api, setAuthToken } from "../lib/api";
 
 function SidebarBody({ label, role, accent, sections, user, onLogout, isMobile, onClose }) {
   return (
@@ -77,6 +77,7 @@ export default function RoleLayout({ label, role, accent, sections }) {
 
   const logout = async () => {
     await api.post("/auth/logout").catch(() => {});
+    setAuthToken(null);
     setUser(null);
     navigate("/");
   };

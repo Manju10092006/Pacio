@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
-import { ArrowUpRight, ArrowRight, ChevronRight, FileText, Users, Target, Building2, Code2, Brain, MessageSquare, Send, BarChart3, GraduationCap } from "lucide-react";
+import { ArrowUpRight, ArrowRight, FileText, Users, Building2, Code2, Brain, MessageSquare, Send, BarChart3, GraduationCap } from "lucide-react";
 import { api } from "../lib/api";
 
 gsap.registerPlugin(ScrollTrigger);

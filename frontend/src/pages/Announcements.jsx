@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { toast } from "sonner";
-import { Megaphone, Plus, Pin } from "lucide-react";
+import { Plus, Pin } from "lucide-react";
 import { useAuth } from "../App";
 
 const KINDS = ["drive", "training", "report", "fdp", "general"];

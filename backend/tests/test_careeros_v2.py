@@ -148,21 +148,31 @@ def test_dsa_topics():
     r = requests.get(f"{API}/dsa/topics")
     assert r.status_code == 200
     topics = r.json()["topics"]
-    assert len(topics) == 19
+    assert len(topics) == 18
     codes = {t["code"] for t in topics}
     expected = {"BASICS", "SORTING", "ARRAYS", "BIN_SEARCH", "STR_BASIC", "LL", "RECURSION",
                 "BIT_MANIP", "STACK", "SLIDING", "HEAP", "GREEDY", "TREE", "BST", "GRAPH",
-                "DP", "TRIES", "STR_ADV", "MATHS"}
+                "DP", "TRIES", "STR_ADV"}
     assert expected.issubset(codes)
-    assert r.json()["total"] == 455
+    assert r.json()["total"] == 474
+
+
+def test_dsa_question_catalog(tpo_session):
+    r = tpo_session.get(f"{API}/dsa/questions")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["total"] == 474
+    assert len(data["questions"]) == 474
+    titles = {q["title"] for q in data["questions"]}
+    assert {"Two Sum", "Kadane's Algorithm", "Rotate Matrix", "Merge Intervals"}.issubset(titles)
 
 
 def test_dsa_intelligence_tpo(tpo_session):
     r = tpo_session.get(f"{API}/dsa/intelligence")
     assert r.status_code == 200
     data = r.json()
-    assert len(data["by_topic"]) == 19
-    assert data["total_problems"] == 455
+    assert len(data["by_topic"]) == 18
+    assert data["total_problems"] == 474
     assert len(data["leaderboard"]) == 20
 
 
@@ -172,13 +182,20 @@ def test_student_dashboard(student_session):
     assert r.status_code == 200, r.text
     d = r.json()
     assert d["student"]["name"]
-    assert len(d["dsa"]) == 19
-    assert d["dsa_total"] == 455
+    assert len(d["dsa"]) == 18
+    assert d["dsa_total"] == 474
     assert isinstance(d["aptitude"], list)
     assert isinstance(d["interviews"], list)
     assert isinstance(d["applications"], list)
     assert isinstance(d["recommended_jobs"], list)
     assert isinstance(d["topics"], list)
+
+    q = student_session.get(f"{API}/me/dsa/questions")
+    assert q.status_code == 200, q.text
+    qp = q.json()
+    assert qp["total"] == 474
+    assert len(qp["questions"]) == 474
+    assert len(qp["topics"]) == 18
 
 
 def test_student_dsa_toggle(student_session):
@@ -187,6 +204,51 @@ def test_student_dsa_toggle(student_session):
     r = student_session.post(f"{API}/me/dsa/toggle", json={"topic_code": "ARRAYS", "delta": 1})
     assert r.status_code == 200
     assert r.json()["solved"] >= arr_before["solved"]
+
+
+def test_student_readiness_engine(student_session):
+    r = student_session.get(f"{API}/readiness/me")
+    assert r.status_code == 200, r.text
+    readiness = r.json()["readiness"]
+    assert 0 <= readiness["score"] <= 100
+    assert readiness["band"] in {"placement_ready", "nearly_ready", "developing", "needs_intervention"}
+    for key in ("dsa", "aptitude", "ats", "interview", "cgpa", "consistency"):
+        assert key in readiness["components"]
+        assert "score" in readiness["components"][key]
+
+
+def test_staff_readiness_roster(tpo_session):
+    r = tpo_session.get(f"{API}/readiness/students", params={"limit": 25})
+    assert r.status_code == 200, r.text
+    data = r.json()
+    assert data["scope"] == "institution"
+    assert data["count"] > 0
+    assert 0 <= data["avg_readiness"] <= 100
+    assert isinstance(data["weak_students"], list)
+    assert {"dsa", "aptitude", "ats", "interview", "cgpa", "consistency"}.issubset(data["component_avgs"].keys())
+
+
+def test_role_workspace_contracts():
+    cases = [
+        ("tpo", "tpo", None),
+        ("faculty", "faculty", "CSE"),
+        ("student", "student", "CSE"),
+        ("recruiter", "recruiter", None),
+    ]
+    for key, expected_role, expected_department in cases:
+        s, login = _login(DEMO[key])
+        assert login.status_code == 200, login.text
+        r = s.get(f"{API}/workspace/me")
+        assert r.status_code == 200, r.text
+        data = r.json()
+        assert data["role"] == expected_role
+        assert data["title"]
+        assert data["headline"]
+        assert len(data["kpis"]) >= 4
+        assert len(data["actions"]) > 0
+        assert "sections" in data
+        if expected_department:
+            assert data["scope"]["department"] == expected_department
 
 
 # ---------- aptitude / ATS / interviews ----------
@@ -212,6 +274,18 @@ def test_interviews_intelligence(tpo_session):
     d = r.json()
     assert isinstance(d["rows"], list)
     assert "avg_confidence" in d and "avg_technical" in d
+    assert "rubric_avgs" in d
+    assert isinstance(d["priority_students"], list)
+
+
+def test_cross_module_intelligence(tpo_session):
+    r = tpo_session.get(f"{API}/intelligence/modules")
+    assert r.status_code == 200, r.text
+    d = r.json()
+    codes = {card["code"] for card in d["cards"]}
+    assert {"placements", "dsa", "aptitude", "ats", "interviews", "training"}.issubset(codes)
+    assert isinstance(d["critical_alerts"], list)
+    assert isinstance(d["recommendations"], list)
 
 
 # ---------- placements ----------
@@ -273,6 +347,36 @@ def test_talent_pool_recruiter(recruiter_session):
     # Sorted by readiness_score desc
     scores = [s.get("readiness_score", 0) for s in items]
     assert scores == sorted(scores, reverse=True)
+
+
+def test_talent_pool_recruiter_me_route(recruiter_session):
+    r = recruiter_session.get(f"{API}/recruiters/me/talent-pool", params={"min_cgpa": 7.0})
+    assert r.status_code == 200, r.text
+    data = r.json()
+    assert data["recruiter_id"] == "rec_amazon"
+    assert data["count"] == len(data["items"])
+    assert len(data["items"]) > 0
+
+
+def test_talent_pool_recruiter_filters(recruiter_session):
+    r = recruiter_session.get(f"{API}/recruiters/me/talent-pool", params={"min_cgpa": 7.0, "min_readiness": 50, "department": "CSE", "limit": 10})
+    assert r.status_code == 200, r.text
+    data = r.json()
+    assert data["filters"]["department"] == "CSE"
+    assert data["filters"]["min_readiness"] == 50
+    assert data["count"] <= 10
+    assert all(item["department"] == "CSE" and item["readiness_score"] >= 50 for item in data["items"])
+
+
+def test_recruiter_analytics(recruiter_session):
+    r = recruiter_session.get(f"{API}/recruiters/me/analytics")
+    assert r.status_code == 200, r.text
+    data = r.json()
+    assert data["recruiter_id"] == "rec_amazon"
+    assert "conversion_rate" in data["summary"]
+    assert isinstance(data["job_funnels"], list)
+    assert isinstance(data["institution_funnel"], list)
+    assert isinstance(data["action_queue"], list) and len(data["action_queue"]) > 0
 
 
 def test_talent_pool_forbidden_for_tpo(tpo_session):

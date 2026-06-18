@@ -4,28 +4,77 @@ import { api } from "../lib/api";
 export default function InterviewIntelligence() {
   const [d, setD] = useState(null);
   useEffect(() => { api.get("/interviews/intelligence").then(({ data }) => setD(data)); }, []);
-  if (!d) return <div className="font-mono text-xs text-ink-400">LOADING…</div>;
+  if (!d) return <div className="font-mono text-xs text-ink-400">LOADING...</div>;
+
+  const rubric = d.rubric_avgs || {};
+  const summary = d.summary || {};
 
   return (
     <div className="space-y-10">
       <div className="grid grid-cols-12 gap-3">
         <div className="col-span-12 md:col-span-8 editorial p-10">
-          <div className="font-mono text-[10px] tracking-[0.28em] text-ink-400">§ INTERVIEW AI</div>
+          <div className="font-mono text-[10px] tracking-[0.28em] text-ink-400">INTERVIEW AI</div>
           <h1 className="font-display text-5xl md:text-6xl tracking-tightest mt-3" data-testid="int-heading">
-            Mock interviews, <span className="text-accent">measured.</span>
+            Interviews, diagnosed.
           </h1>
           <p className="font-serif text-lg text-ink-500 mt-2 max-w-xl">
-            Confidence, communication, technical depth, body language — every mock leaves a fingerprint.
+            Confidence, communication, technical depth, and body language translated into remediation queues.
           </p>
         </div>
         <div className="col-span-12 md:col-span-4 grid grid-rows-2 gap-3">
           <div className="editorial bg-ink-900 text-bone-100 p-8">
-            <div className="font-mono text-[10px] tracking-[0.24em] text-bone-100/40">AVG CONFIDENCE</div>
-            <div className="font-display text-6xl tnum mt-2">{d.avg_confidence}%</div>
+            <div className="font-mono text-[10px] tracking-[0.24em] text-bone-100/40">AVG OVERALL</div>
+            <div className="font-display text-6xl tnum mt-2">{summary.avg_overall || 0}%</div>
           </div>
           <div className="editorial p-8">
-            <div className="font-mono text-[10px] tracking-[0.24em] text-ink-400">AVG TECHNICAL</div>
-            <div className="font-display text-6xl tnum mt-2 text-accent">{d.avg_technical}%</div>
+            <div className="font-mono text-[10px] tracking-[0.24em] text-ink-400">WEAK QUEUE</div>
+            <div className="font-display text-6xl tnum mt-2 text-accent">{summary.weak_student_count || 0}</div>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-12 gap-3" data-testid="int-rubrics">
+        {[
+          ["Confidence", rubric.confidence],
+          ["Communication", rubric.communication],
+          ["Technical", rubric.technical],
+          ["Body language", rubric.body_language],
+        ].map(([label, value]) => (
+          <div key={label} className="col-span-12 md:col-span-3 editorial p-6">
+            <div className="font-mono text-[10px] tracking-[0.24em] text-ink-400">{label.toUpperCase()}</div>
+            <div className="font-display text-5xl tracking-tightest mt-3 tnum">{value || 0}%</div>
+            <div className="mt-3 h-1.5 bg-bone-300 relative">
+              <div className="absolute inset-y-0 left-0 bg-accent" style={{ width: `${value || 0}%` }} />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-12 gap-3">
+        <div className="col-span-12 md:col-span-5 editorial p-8">
+          <div className="font-mono text-[10px] tracking-[0.24em] text-ink-400">WEAK RUBRICS</div>
+          <div className="mt-5 space-y-3">
+            {(d.weak_rubrics || []).map((r) => (
+              <div key={r.rubric} className="border border-line bg-bone-50 p-4">
+                <div className="font-display text-lg capitalize">{r.rubric.replace("_", " ")}</div>
+                <div className="text-sm text-ink-500">Score {r.score}% / benchmark gap {r.gap_to_benchmark}</div>
+              </div>
+            ))}
+            {(d.weak_rubrics || []).length === 0 && <div className="text-sm text-ink-400">Rubric health is above intervention benchmark.</div>}
+          </div>
+        </div>
+        <div className="col-span-12 md:col-span-7 editorial p-8 bg-bone-50">
+          <div className="font-mono text-[10px] tracking-[0.24em] text-ink-400">INTERVIEW TYPE PERFORMANCE</div>
+          <div className="mt-5 divide-y divide-line">
+            {(d.by_type || []).map((row) => (
+              <div key={row.type} className="grid grid-cols-12 py-3 text-sm">
+                <div className="col-span-4 font-display text-lg">{row.type}</div>
+                <div className="col-span-2 font-mono text-xs">{row.count} reports</div>
+                <div className="col-span-2 text-right">Overall {row.avg_overall}%</div>
+                <div className="col-span-2 text-right">Tech {row.avg_technical}%</div>
+                <div className="col-span-2 text-right">Comm {row.avg_communication}%</div>
+              </div>
+            ))}
           </div>
         </div>
       </div>
@@ -45,7 +94,7 @@ export default function InterviewIntelligence() {
           <div key={r.interview_id} className="grid grid-cols-12 px-6 py-4 border-b border-line items-center text-sm" data-testid="int-row">
             <div className="col-span-3">
               <div className="font-medium">{r.student_name}</div>
-              <div className="font-mono text-[10px] text-ink-400">{r.roll_number}</div>
+              <div className="font-mono text-[10px] text-ink-400">{r.roll_number} / {r.department}</div>
             </div>
             <div className="col-span-1"><span className="pill bg-bone-100 text-[9px]">{r.type}</span></div>
             <div className="col-span-1 text-right font-mono tnum">{r.confidence_score}</div>

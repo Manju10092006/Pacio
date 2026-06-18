@@ -22,10 +22,24 @@ export default function InterviewSchedule() {
   useEffect(() => {
     load();
     if (user?.role !== "student") {
-      api.get("/students").then(({ data }) => setStudents(data.items || []));
+      if (user?.role === "recruiter") {
+        api.get("/recruiters/me/talent-pool?min_cgpa=6.5&limit=120").then(({ data }) => setStudents(data.items || []));
+      } else {
+        api.get("/students").then(({ data }) => setStudents(data.items || []));
+      }
       api.get("/jobs").then(({ data }) => setJobs(data.items || []));
     }
   }, [user]);
+
+  const pickJob = (jobId) => {
+    const job = jobs.find((j) => j.job_id === jobId);
+    setForm({
+      ...form,
+      job_id: jobId || undefined,
+      company: job?.company || form.company,
+      role: job?.title || form.role,
+    });
+  };
 
   const submit = async (e) => {
     e.preventDefault();
@@ -89,7 +103,7 @@ export default function InterviewSchedule() {
             data-testid="sched-duration" placeholder="Duration (min)" className="col-span-12 md:col-span-2 px-3 py-2.5 border border-line bg-bone-50" />
           <input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })}
             data-testid="sched-location" placeholder="Zoom / In-person" className="col-span-12 md:col-span-3 px-3 py-2.5 border border-line bg-bone-50" />
-          <select value={form.job_id || ""} onChange={(e) => setForm({ ...form, job_id: e.target.value || undefined })}
+          <select value={form.job_id || ""} onChange={(e) => pickJob(e.target.value)}
             className="col-span-12 md:col-span-3 px-3 py-2.5 border border-line bg-bone-50">
             <option value="">(optional) link to job…</option>
             {jobs.map((j) => <option key={j.job_id} value={j.job_id}>{j.company} · {j.title}</option>)}

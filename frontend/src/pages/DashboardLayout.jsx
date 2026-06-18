@@ -2,7 +2,7 @@ import React from "react";
 import { NavLink, Outlet, useNavigate, Link } from "react-router-dom";
 import { LayoutDashboard, Building2, Users, Layers, BarChart3, GraduationCap, FileText, Shield, LogOut, ArrowUpRight } from "lucide-react";
 import { useAuth } from "../App";
-import { api } from "../lib/api";
+import { api, setAuthToken } from "../lib/api";
 
 const NAV = [
   { to: "/app/overview", label: "Overview", icon: LayoutDashboard, key: "overview" },
@@ -19,7 +19,8 @@ export default function DashboardLayout() {
   const navigate = useNavigate();
 
   const logout = async () => {
-    await api.post("/auth/logout");
+    await api.post("/auth/logout").catch(() => {});
+    setAuthToken(null);
     setUser(null);
     navigate("/");
   };

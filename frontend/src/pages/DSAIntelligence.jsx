@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../lib/api";
-import { Code2, TrendingUp, Trophy } from "lucide-react";
+import { Trophy } from "lucide-react";
 
 export default function DSAIntelligence() {
   const [d, setD] = useState(null);
@@ -8,6 +8,7 @@ export default function DSAIntelligence() {
   if (!d) return <div className="font-mono text-xs text-ink-400">LOADING DSA …</div>;
 
   const total = d.total_problems;
+  const topicCount = d.by_topic?.length || 0;
   return (
     <div className="space-y-10">
       <div className="grid grid-cols-12 gap-3">
@@ -34,7 +35,7 @@ export default function DSAIntelligence() {
         <div className="col-span-12 md:col-span-4 editorial bg-ink-900 text-bone-100 p-10">
           <div className="font-mono text-[10px] tracking-[0.28em] text-bone-100/40">PROBLEMS · SHEET TOTAL</div>
           <div className="font-display text-[8vw] md:text-[6vw] tracking-tightest leading-[0.9] tnum">{total}</div>
-          <div className="text-bone-100/60 text-sm">across 19 topics</div>
+          <div className="text-bone-100/60 text-sm">across {topicCount} sections</div>
         </div>
       </div>
 

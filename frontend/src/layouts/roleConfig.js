@@ -1,4 +1,4 @@
-import { LayoutDashboard, Building2, Users, Layers, BarChart3, GraduationCap, FileText, Briefcase, Megaphone, Code2, Brain, FileSearch, MessageSquare, Send, Target, Network, FileBarChart, CalendarPlus, UserPlus, FileSpreadsheet } from "lucide-react";
+import { LayoutDashboard, Building2, Users, Layers, BarChart3, GraduationCap, FileText, Briefcase, Megaphone, Code2, Brain, FileSearch, MessageSquare, Send, Target, Network, FileBarChart, CalendarPlus, UserPlus } from "lucide-react";
 
 const item = (to, label, icon, key) => ({ to, label, icon, key });
 

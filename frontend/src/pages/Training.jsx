@@ -4,6 +4,7 @@ import { api } from "../lib/api";
 export default function Training() {
   const [data, setData] = useState(null);
   useEffect(() => { api.get("/training/completion").then(({ data }) => setData(data)); }, []);
+  const summary = data?.summary || {};
 
   return (
     <div className="space-y-10">
@@ -11,6 +12,21 @@ export default function Training() {
         <div className="num-mono text-[11px] tracking-[0.28em] text-ink-400">FEATURE · 06</div>
         <h1 className="font-display text-5xl md:text-6xl tracking-tightest mt-3">Training completion</h1>
         <p className="font-serif text-lg text-ink-500 mt-2">Module-level telemetry across every Skill Tank program.</p>
+      </div>
+
+      <div className="grid grid-cols-12 gap-3" data-testid="training-summary">
+        {[
+          { label: "Avg completion", value: `${summary.avg_completion || 0}%`, sub: summary.health || "health" },
+          { label: "Programs", value: summary.programs || 0, sub: "active learning tracks" },
+          { label: "Enrollments", value: summary.enrollments || 0, sub: "module records" },
+          { label: "Low completion", value: summary.low_completion_count || 0, sub: "needs follow-up" },
+        ].map((card) => (
+          <div key={card.label} className="col-span-12 md:col-span-3 editorial p-6">
+            <div className="num-mono text-[10px] tracking-[0.24em] text-ink-400">{card.label.toUpperCase()}</div>
+            <div className="font-display text-5xl tracking-tightest mt-3 tnum">{card.value}</div>
+            <div className="text-sm text-ink-500 mt-2">{card.sub}</div>
+          </div>
+        ))}
       </div>
 
       {/* Program summary */}

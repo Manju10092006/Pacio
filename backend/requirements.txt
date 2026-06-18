@@ -15,4 +15,3 @@ pyjwt==2.8.0
 reportlab==4.0.9
 pypdf==4.0.1
 websockets==16.0
-emergentintegrations==0.2.0

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../lib/api";
-import { ResponsiveContainer, LineChart, Line, Tooltip, XAxis, YAxis, CartesianGrid, ScatterChart, Scatter, ZAxis } from "recharts";
+import { ResponsiveContainer, LineChart, Line, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts";
 
 export default function Outcomes() {
   const [data, setData] = useState(null);
@@ -11,6 +11,7 @@ export default function Outcomes() {
     avg: y.avg_lpa,
     top: y.top_offer_lpa,
   }));
+  const forecast = data?.forecast || {};
 
   return (
     <div className="space-y-10">
@@ -18,6 +19,21 @@ export default function Outcomes() {
         <div className="num-mono text-[11px] tracking-[0.28em] text-ink-400">FEATURE · 05</div>
         <h1 className="font-display text-5xl md:text-6xl tracking-tightest mt-3">Placement outcomes</h1>
         <p className="font-serif text-lg text-ink-500 mt-2">Year-over-year intelligence across recruiters, departments and CTC bands.</p>
+      </div>
+
+      <div className="grid grid-cols-12 gap-3" data-testid="placement-forecast">
+        {[
+          { label: "Forecasted offers", value: forecast.forecasted_offers || 0, sub: `${forecast.confidence || "low"} confidence` },
+          { label: "Current offers", value: forecast.current_offers || 0, sub: forecast.latest_year || "current year" },
+          { label: "Open capacity", value: forecast.open_drive_capacity || 0, sub: "open role seats" },
+          { label: "Interview stage", value: forecast.interview_stage_count || 0, sub: "near conversion" },
+        ].map((card) => (
+          <div key={card.label} className="col-span-12 md:col-span-3 editorial p-6">
+            <div className="num-mono text-[10px] tracking-[0.24em] text-ink-400">{card.label.toUpperCase()}</div>
+            <div className="font-display text-5xl tracking-tightest mt-3 tnum">{card.value}</div>
+            <div className="text-sm text-ink-500 mt-2">{card.sub}</div>
+          </div>
+        ))}
       </div>
 
       <div className="grid grid-cols-12 gap-6">

@@ -1,13 +1,17 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { useAuth } from "../App";
-import { Code2, FileSearch, Brain, MessageSquare, TrendingUp, Award, Briefcase } from "lucide-react";
+import { Code2, TrendingUp, Award, Briefcase } from "lucide-react";
 import { Link } from "react-router-dom";
 
 export default function StudentHome() {
-  const { user } = useAuth();
+  useAuth();
   const [d, setD] = useState(null);
-  useEffect(() => { api.get("/me/dashboard").then(({ data }) => setD(data)).catch(() => {}); }, []);
+  const [workspace, setWorkspace] = useState(null);
+  useEffect(() => {
+    api.get("/me/dashboard").then(({ data }) => setD(data)).catch(() => {});
+    api.get("/workspace/me").then(({ data }) => setWorkspace(data)).catch(() => {});
+  }, []);
   if (!d) return <div className="font-mono text-xs text-ink-400">LOADING…</div>;
 
   const s = d.student;
@@ -15,7 +19,10 @@ export default function StudentHome() {
   const dsaPct = Math.round((solved / d.dsa_total) * 100);
   const aptAvg = d.aptitude.length ? Math.round(d.aptitude.reduce((a, x) => a + x.score_pct, 0) / d.aptitude.length) : 0;
   const intAvg = d.interviews.length ? Math.round(d.interviews.reduce((a, x) => a + x.overall_score, 0) / d.interviews.length) : 0;
-  const readiness = s.readiness_score;
+  const engine = d.readiness_engine;
+  const readiness = Math.round(engine?.score ?? s.readiness_score);
+  const atsScore = Math.round(engine?.components?.ats?.score ?? d.ats?.score ?? s.ats_score);
+  const interviewScore = Math.round(engine?.components?.interview?.score ?? intAvg);
 
   return (
     <div className="space-y-10">
@@ -30,7 +37,7 @@ export default function StudentHome() {
           <p className="relative font-serif text-lg text-ink-500 mt-3 max-w-xl">
             {s.placement?.placed
               ? `Placed at ${s.placement.company} (₹${s.placement.ctc_lpa}L). Now help your peers.`
-              : `${dsaPct}% DSA done · ATS ${d.ats?.score || s.ats_score} · readiness ${readiness}/100. Keep going.`}
+              : `${dsaPct}% DSA done · ATS ${atsScore} · ${engine?.label || "readiness"} ${readiness}/100. Keep going.`}
           </p>
           <div className="relative mt-5 flex flex-wrap gap-2">
             <span className="pill">{s.roll_number}</span>
@@ -43,13 +50,13 @@ export default function StudentHome() {
           <div>
             <div className="font-mono text-[10px] tracking-[0.28em] text-bone-100/40">READINESS SCORE</div>
             <div className="font-display text-[14vw] md:text-[10vw] tracking-tightest leading-[0.9] tnum text-accent">{readiness}</div>
-            <div className="text-bone-100/60 text-sm">composite (CGPA · DSA · ATS · Interview)</div>
+            <div className="text-bone-100/60 text-sm">{engine?.label || "composite"} (CGPA · DSA · ATS · Interview)</div>
           </div>
           <div className="grid grid-cols-3 gap-3 mt-6">
             {[
               { l: "DSA", v: `${dsaPct}%` },
-              { l: "ATS", v: d.ats?.score || s.ats_score },
-              { l: "INT", v: `${intAvg}` },
+              { l: "ATS", v: atsScore },
+              { l: "INT", v: `${interviewScore}` },
             ].map((x) => (
               <div key={x.l}>
                 <div className="font-mono text-[10px] text-bone-100/40 tracking-[0.2em]">{x.l}</div>
@@ -77,6 +84,18 @@ export default function StudentHome() {
           </Link>
         ))}
       </div>
+
+      {workspace?.actions?.length > 0 && (
+        <div className="grid grid-cols-12 gap-3" data-testid="student-decision-queue">
+          {workspace.actions.slice(0, 3).map((action, i) => (
+            <Link key={action.label} to={action.to} className="col-span-12 md:col-span-4 editorial p-6 hover:border-ink-900 transition-colors">
+              <div className="font-mono text-[10px] tracking-[0.24em] text-ink-400">NEXT MOVE {String(i + 1).padStart(2, "0")}</div>
+              <div className="font-display text-xl tracking-tight mt-3">{action.label}</div>
+              <div className="text-sm text-ink-500 mt-2">{action.reason}</div>
+            </Link>
+          ))}
+        </div>
+      )}
 
       {/* DSA breakdown + Recommended jobs */}
       <div className="grid grid-cols-12 gap-3">

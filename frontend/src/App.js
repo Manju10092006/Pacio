@@ -41,10 +41,29 @@ import StudentDSA from "./pages/StudentDSA";
 
 const AuthCtx = createContext(null);
 export const useAuth = () => useContext(AuthCtx);
+const USER_CACHE_KEY = "careeros_user";
+
+function readCachedUser() {
+  try {
+    const raw = window.localStorage.getItem(USER_CACHE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
 
 function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUserState] = useState(() => readCachedUser());
+  const [loading, setLoading] = useState(() => !readCachedUser());
+  const setUser = (next) => {
+    setUserState(next);
+    try {
+      if (next) window.localStorage.setItem(USER_CACHE_KEY, JSON.stringify(next));
+      else window.localStorage.removeItem(USER_CACHE_KEY);
+    } catch {
+      // Token/cookie auth still work when storage is unavailable.
+    }
+  };
   const refresh = async () => {
     try { const { data } = await api.get("/auth/me"); setUser(data); }
     catch { setUser(null); }

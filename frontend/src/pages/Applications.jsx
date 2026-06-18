@@ -2,8 +2,8 @@ import React, { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { toast } from "sonner";
 
-const STAGES = ["Applied", "Shortlisted", "Interview", "Selected", "Rejected"];
-const STAGE_COLOR = { Applied: "#0a0a0a", Shortlisted: "#d4a017", Interview: "#c1440e", Selected: "#4a5d3a", Rejected: "#9a9a9a" };
+const STAGES = ["Applied", "Shortlisted", "Assessment", "Interview", "Selected", "Rejected"];
+const STAGE_COLOR = { Applied: "#0a0a0a", Shortlisted: "#d4a017", Assessment: "#6b7280", Interview: "#c1440e", Selected: "#4a5d3a", Rejected: "#9a9a9a" };
 
 export default function Applications() {
   const [d, setD] = useState(null);
@@ -13,7 +13,8 @@ export default function Applications() {
     const q = s ? `?stage=${s}` : "";
     api.get(`/applications${q}`).then(({ data }) => setD(data));
   };
-  useEffect(() => { load(""); /* eslint-disable-next-line */ }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { load(""); }, []);
 
   const advance = async (id, next) => {
     try { await api.patch(`/applications/${id}`, { stage: next }); toast.success(`Moved to ${next}`); load(); }
@@ -30,6 +31,23 @@ export default function Applications() {
           Every candidate, <span className="text-accent">every stage.</span>
         </h1>
       </div>
+
+      {d.analytics && (
+        <div className="grid grid-cols-12 gap-3" data-testid="apps-analytics">
+          {[
+            { label: "Active", value: d.analytics.active, sub: "not terminal" },
+            { label: "Conversion", value: `${d.analytics.conversion_rate}%`, sub: "selected / total" },
+            { label: "Interview rate", value: `${d.analytics.interview_rate}%`, sub: "current stage" },
+            { label: "Drop rate", value: `${d.analytics.drop_rate}%`, sub: "rejected / total" },
+          ].map((card) => (
+            <div key={card.label} className="col-span-12 md:col-span-3 editorial p-6">
+              <div className="font-mono text-[10px] tracking-[0.24em] text-ink-400">{card.label.toUpperCase()}</div>
+              <div className="font-display text-5xl tracking-tightest mt-3 tnum">{card.value}</div>
+              <div className="text-sm text-ink-500 mt-2">{card.sub}</div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Pipeline counts */}
       <div className="grid grid-cols-12 gap-3" data-testid="apps-pipeline">

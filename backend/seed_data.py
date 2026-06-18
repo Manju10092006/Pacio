@@ -1,6 +1,6 @@
-"""Massive seed across institutions, departments (engineering/MBA/pharma/medical/diploma/degree),
+﻿"""Massive seed across institutions, departments (engineering/MBA/pharma/medical/diploma/degree),
 students, recruiters, jobs, applications, DSA progress (Striver A2Z), aptitude, ATS, interviews,
-announcements, training programs, and KMIT real placement data 2017-18 → 2025-26.
+announcements, training programs, and KMIT real placement data 2017-18 â†’ 2025-26.
 """
 from __future__ import annotations
 
@@ -8,30 +8,7 @@ import random
 import uuid
 from datetime import datetime, timezone, timedelta
 
-# ============== STRIVER A2Z DSA SHEET ==============
-STRIVER_TOPICS = [
-    {"code": "BASICS",       "name": "Learn the basics",                  "problems": 14, "order": 1},
-    {"code": "SORTING",      "name": "Sorting techniques",                "problems": 7,  "order": 2},
-    {"code": "ARRAYS",       "name": "Arrays",                            "problems": 40, "order": 3},
-    {"code": "BIN_SEARCH",   "name": "Binary search",                     "problems": 32, "order": 4},
-    {"code": "STR_BASIC",    "name": "Strings — basic",                   "problems": 7,  "order": 5},
-    {"code": "LL",           "name": "Linked list",                       "problems": 31, "order": 6},
-    {"code": "RECURSION",    "name": "Recursion",                         "problems": 25, "order": 7},
-    {"code": "BIT_MANIP",    "name": "Bit manipulation",                  "problems": 18, "order": 8},
-    {"code": "STACK",        "name": "Stacks & queues",                   "problems": 30, "order": 9},
-    {"code": "SLIDING",      "name": "Sliding window & 2-pointer",        "problems": 12, "order": 10},
-    {"code": "HEAP",         "name": "Heaps",                             "problems": 17, "order": 11},
-    {"code": "GREEDY",       "name": "Greedy algorithms",                 "problems": 16, "order": 12},
-    {"code": "TREE",         "name": "Binary trees",                      "problems": 39, "order": 13},
-    {"code": "BST",          "name": "Binary search trees",               "problems": 16, "order": 14},
-    {"code": "GRAPH",        "name": "Graphs",                            "problems": 54, "order": 15},
-    {"code": "DP",           "name": "Dynamic programming",               "problems": 56, "order": 16},
-    {"code": "TRIES",        "name": "Tries",                             "problems": 7,  "order": 17},
-    {"code": "STR_ADV",      "name": "Strings — advanced",                "problems": 9,  "order": 18},
-    {"code": "MATHS",        "name": "Maths",                             "problems": 25, "order": 19},
-]
-DSA_TOTAL = sum(t["problems"] for t in STRIVER_TOPICS)  # = 455 (Striver A2Z official total)
-assert DSA_TOTAL == 455, f"Striver A2Z total drift: {DSA_TOTAL}"
+from dsa_catalog import DSA_TOTAL, STRIVER_TOPICS, build_dsa_question_bank, question_bank_by_topic
 
 APTITUDE_SECTIONS = [
     {"code": "QUANT", "name": "Quantitative Aptitude", "topics": ["Numbers", "Percentages", "Profit & Loss", "Time-Speed-Distance", "Time & Work", "Ratios", "Permutations & Combinations", "Probability"]},
@@ -40,7 +17,7 @@ APTITUDE_SECTIONS = [
     {"code": "DI", "name": "Data Interpretation", "topics": ["Tables", "Pie Charts", "Bar Graphs", "Line Charts", "Caselets"]},
 ]
 
-# ============== REAL KMIT PLACEMENT DATA (2017-18 → 2025-26) ==============
+# ============== REAL KMIT PLACEMENT DATA (2017-18 â†’ 2025-26) ==============
 KMIT_PLACEMENT_RECORDS = [
     ("2025-26", "Amazon", 4, 80.0), ("2025-26", "Google", 3, 54.5), ("2025-26", "Microsoft", 5, 44.0),
     ("2025-26", "Salesforce", 6, 38.0), ("2025-26", "ServiceNow", 4, 42.0), ("2025-26", "Adobe", 3, 35.0),
@@ -152,7 +129,7 @@ INSTITUTIONS = [
     },
     {
         "institution_id": "inst_diploma",
-        "name": "Government Polytechnic — Masab Tank",
+        "name": "Government Polytechnic â€” Masab Tank",
         "short_name": "GPT-MT",
         "type": "Diploma",
         "city": "Hyderabad", "state": "Telangana",
@@ -160,7 +137,7 @@ INSTITUTIONS = [
         "departments": ["Mechanical", "Civil", "EEE", "Computer Engg"],
         "established": 1958,
         "logo": "G",
-        "tagline": "Skilled diploma → industry pipeline.",
+        "tagline": "Skilled diploma â†’ industry pipeline.",
     },
 ]
 
@@ -237,11 +214,14 @@ def seed_payload() -> dict:
     now = datetime.now(timezone.utc)
     docs = {
         "institutions": [], "departments": [], "students": [], "recruiters": [],
-        "jobs": [], "applications": [], "dsa_progress": [], "aptitude_scores": [],
+        "jobs": [], "applications": [], "dsa_questions": [], "dsa_progress": [], "dsa_question_progress": [], "aptitude_scores": [],
         "ats_reports": [], "interview_reports": [], "announcements": [],
         "training_programs": [], "enrollments": [], "placement_records": [],
         "year_summaries": [], "mous": [], "comm_log": [],
     }
+    question_bank = build_dsa_question_bank(now)
+    questions_by_topic = question_bank_by_topic(now)
+    docs["dsa_questions"].extend(question_bank)
 
     # -- Institutions --
     for inst in INSTITUTIONS:
@@ -381,22 +361,45 @@ def seed_payload() -> dict:
     # -- DSA progress (Striver A2Z) for engineering students --
     eng_students = [s for s in student_pool if s["institution_id"] in ("inst_kmit",)]
     for s in eng_students:
-        # Higher CGPA → higher solve rate
-        skill_factor = (s["cgpa"] - 6.0) / 4.0  # 0.1 → 0.95
+        # Higher CGPA â†’ higher solve rate
+        skill_factor = (s["cgpa"] - 6.0) / 4.0  # 0.1 â†’ 0.95
         for t in STRIVER_TOPICS:
             solved = max(0, int(t["problems"] * (skill_factor + random.uniform(-0.18, 0.18))))
             solved = min(t["problems"], solved)
+            attempted = min(t["problems"], solved + random.randint(0, 4))
+            last_solved_at = (now - timedelta(days=random.randint(0, 30))).isoformat()
             docs["dsa_progress"].append({
                 "progress_id": f"dsa_{uuid.uuid4().hex[:10]}",
                 "student_id": s["student_id"],
                 "institution_id": s["institution_id"],
                 "topic_code": t["code"],
                 "topic_name": t["name"],
+                "topic_order": t["order"],
                 "total": t["problems"],
                 "solved": solved,
-                "attempted": min(t["problems"], solved + random.randint(0, 4)),
-                "last_solved_at": (now - timedelta(days=random.randint(0, 30))).isoformat(),
+                "attempted": attempted,
+                "last_solved_at": last_solved_at,
             })
+            for index, question in enumerate(questions_by_topic[t["code"]][:attempted], start=1):
+                is_solved = index <= solved
+                mastery = random.randint(72, 96) if is_solved else random.randint(18, 52)
+                docs["dsa_question_progress"].append({
+                    "progress_id": f"dsqp_{uuid.uuid4().hex[:10]}",
+                    "student_id": s["student_id"],
+                    "institution_id": s["institution_id"],
+                    "question_id": question["question_id"],
+                    "topic_code": question["topic_code"],
+                    "subtopic_code": question["subtopic_code"],
+                    "solved": is_solved,
+                    "attempted": True,
+                    "mastery": mastery,
+                    "revision_count": random.randint(1, 4) if is_solved and mastery >= 82 else random.randint(0, 2),
+                    "notes": "",
+                    "faculty_comments": [],
+                    "difficulty": question["difficulty"],
+                    "last_solved_at": last_solved_at if is_solved else None,
+                    "updated_at": now.isoformat(),
+                })
 
     # -- Aptitude scores --
     for s in eng_students:
@@ -453,7 +456,7 @@ def seed_payload() -> dict:
             "conducted_at": (now - timedelta(days=random.randint(0, 50))).isoformat(),
         })
 
-    # -- Applications (student → job pipeline) --
+    # -- Applications (student â†’ job pipeline) --
     open_jobs = [j for j in docs["jobs"] if j["status"] != "closed"]
     for s in random.sample(student_pool, k=min(380, len(student_pool))):
         for j in random.sample(open_jobs, k=random.randint(1, 4)):
@@ -474,7 +477,7 @@ def seed_payload() -> dict:
                 "next_step_at": (now + timedelta(days=random.randint(1, 14))).isoformat() if stage in ("Shortlisted", "Interview") else None,
             })
 
-    # -- Departments (link inst → dept docs) --
+    # -- Departments (link inst â†’ dept docs) --
     for inst in INSTITUTIONS:
         for d in inst["departments"]:
             docs["departments"].append({
@@ -524,12 +527,12 @@ def seed_payload() -> dict:
 
     # -- Announcements --
     announcements_seed = [
-        ("Amazon SDE drive — Feb 14", "Tier-1 hiring drive open for CSE / IT / CSE-AIML 2025 batch. Eligibility 7.5 CGPA. Apply by 10 Feb.", "tpo", "drive"),
-        ("DSA Olympiad — Jan 28", "Striver A2Z based intra-institute competition. Top 10 win Goldman mentorship.", "tpo", "training"),
-        ("Mock interview clinic — every Friday", "Faculty-led mock interview slots open for 4th year. Book via student portal.", "faculty", "training"),
+        ("Amazon SDE drive â€” Feb 14", "Tier-1 hiring drive open for CSE / IT / CSE-AIML 2025 batch. Eligibility 7.5 CGPA. Apply by 10 Feb.", "tpo", "drive"),
+        ("DSA Olympiad â€” Jan 28", "Striver A2Z based intra-institute competition. Top 10 win Goldman mentorship.", "tpo", "training"),
+        ("Mock interview clinic â€” every Friday", "Faculty-led mock interview slots open for 4th year. Book via student portal.", "faculty", "training"),
         ("Salesforce Trailhead Quest", "Earn 5+ badges to be auto-shortlisted for Salesforce drive.", "tpo", "drive"),
-        ("Faculty FDP — AI in Pharma", "Two-week FDP starting 5 Feb, JNTUH approved.", "institution_admin", "fdp"),
-        ("Placement reports Q3 ready", "Department-wise Q3 placement summary published — TPO portal.", "tpo", "report"),
+        ("Faculty FDP â€” AI in Pharma", "Two-week FDP starting 5 Feb, JNTUH approved.", "institution_admin", "fdp"),
+        ("Placement reports Q3 ready", "Department-wise Q3 placement summary published â€” TPO portal.", "tpo", "report"),
         ("Resume ATS scoring open", "Upload your resume to get an instant ATS score before Goldman drive.", "tpo", "training"),
     ]
     for t, m, by_role, kind in announcements_seed:
@@ -557,7 +560,7 @@ def seed_payload() -> dict:
         "seats_used": 187,
         "revenue_share_pct": 18.0,
         "accrued_share_inr": 1_842_000,
-        "payout_status": "Quarterly · Next: 28 Feb 2026",
+        "payout_status": "Quarterly Â· Next: 28 Feb 2026",
         "status": "active",
     })
     docs["comm_log"].extend([

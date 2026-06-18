@@ -1,6 +1,6 @@
 import React from "react";
 import { FileText, FileSpreadsheet, Download } from "lucide-react";
-import { apiUrl } from "../lib/api";
+import { apiUrl, getAuthToken } from "../lib/api";
 
 const REPORTS = [
   { kind: "pdf", icon: FileText, title: "Placement report", body: "Year-by-year offers, recruiter ledger, department breakdown — board-ready.", href: "/reports/placement.pdf", file: "placement-report.pdf", color: "#c1440e" },
@@ -13,7 +13,11 @@ const REPORTS = [
 
 export default function Reports() {
   const download = async (href, filename) => {
-    const res = await fetch(apiUrl(href), { credentials: "include" });
+    const token = getAuthToken();
+    const res = await fetch(apiUrl(href), {
+      credentials: "include",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a"); a.href = url; a.download = filename; a.click();

@@ -1,6 +1,6 @@
 import React, { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { api } from "../lib/api";
+import { api, setAuthToken } from "../lib/api";
 
 // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
 export default function AuthCallback() {
@@ -20,12 +20,13 @@ export default function AuthCallback() {
     (async () => {
       try {
         const { data } = await api.post("/auth/session", { session_id: sessionId });
+        setAuthToken(data.access_token);
         // Strip the fragment & route based on approval state
         window.history.replaceState({}, "", window.location.pathname);
         if (!data.user?.approved && data.user?.role !== "super_admin") {
           navigate("/pending", { replace: true, state: { user: data.user } });
         } else {
-          navigate("/app/overview", { replace: true, state: { user: data.user } });
+          navigate("/app", { replace: true, state: { user: data.user } });
         }
       } catch (e) {
         navigate("/login", { replace: true });

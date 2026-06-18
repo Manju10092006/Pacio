@@ -33,7 +33,20 @@ module.exports = {
         body: ["'Satoshi'", "'Inter'", "system-ui", "sans-serif"],
         mono: ["'JetBrains Mono'", "ui-monospace", "monospace"],
       },
-      letterSpacing: { tightest: "-0.045em" },
+      keyframes: {
+        marquee: {
+          "0%": { transform: "translateX(0)" },
+          "100%": { transform: "translateX(-50%)" },
+        },
+        slidein: {
+          "0%": { transform: "translateX(-100%)" },
+          "100%": { transform: "translateX(0)" },
+        },
+      },
+      animation: {
+        marquee: "marquee 40s linear infinite",
+        slidein: "slidein 0.25s ease-out",
+      },
     },
   },
   plugins: [],

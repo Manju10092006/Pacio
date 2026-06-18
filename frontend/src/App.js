@@ -31,6 +31,9 @@ import Jobs from "./pages/Jobs";
 import Recruiters from "./pages/Recruiters";
 import Announcements from "./pages/Announcements";
 import PlatformControl from "./pages/PlatformControl";
+import Reports from "./pages/Reports";
+import InterviewSchedule from "./pages/InterviewSchedule";
+import TeamInvites from "./pages/TeamInvites";
 import RecruiterHome from "./pages/RecruiterHome";
 import TalentPool from "./pages/TalentPool";
 import StudentHome from "./pages/StudentHome";
@@ -107,7 +110,9 @@ function AppRouter() {
         <Route path="profile" element={<CollegeProfile />} />
         <Route path="departments" element={<Roster />} />
         <Route path="programs" element={<Cohorts />} />
+        <Route path="team" element={<TeamInvites />} />
         <Route path="mou" element={<MOU />} />
+        <Route path="reports" element={<Reports />} />
         <Route path="announcements" element={<Announcements />} />
       </Route>
 
@@ -122,9 +127,12 @@ function AppRouter() {
         <Route path="aptitude" element={<AptitudeIntelligence />} />
         <Route path="ats" element={<ATSIntelligence />} />
         <Route path="interviews" element={<InterviewIntelligence />} />
+        <Route path="schedule" element={<InterviewSchedule />} />
         <Route path="applications" element={<Applications />} />
         <Route path="jobs" element={<Jobs />} />
         <Route path="recruiters" element={<Recruiters />} />
+        <Route path="team" element={<TeamInvites />} />
+        <Route path="reports" element={<Reports />} />
         <Route path="mou" element={<MOU />} />
         <Route path="announcements" element={<Announcements />} />
       </Route>
@@ -145,6 +153,7 @@ function AppRouter() {
         <Route path="dsa" element={<StudentDSA />} />
         <Route path="applications" element={<Applications />} />
         <Route path="jobs" element={<Jobs />} />
+        <Route path="schedule" element={<InterviewSchedule />} />
         <Route path="announcements" element={<Announcements />} />
       </Route>
 
@@ -153,6 +162,7 @@ function AppRouter() {
         <Route index element={<RecruiterHome />} />
         <Route path="jobs" element={<Jobs />} />
         <Route path="talent" element={<TalentPool />} />
+        <Route path="schedule" element={<InterviewSchedule />} />
         <Route path="applications" element={<Applications />} />
       </Route>
 

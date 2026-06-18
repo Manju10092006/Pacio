@@ -1,4 +1,4 @@
-import { LayoutDashboard, Building2, Users, Layers, BarChart3, GraduationCap, FileText, Shield, Briefcase, Megaphone, Code2, Brain, FileSearch, MessageSquare, Send, Target, Network } from "lucide-react";
+import { LayoutDashboard, Building2, Users, Layers, BarChart3, GraduationCap, FileText, Briefcase, Megaphone, Code2, Brain, FileSearch, MessageSquare, Send, Target, Network, FileBarChart, CalendarPlus, UserPlus, FileSpreadsheet } from "lucide-react";
 
 const item = (to, label, icon, key) => ({ to, label, icon, key });
 
@@ -31,7 +31,9 @@ export const roleConfig = {
         item("/institution/programs", "Training programs", Layers, "programs"),
       ]},
       { title: "Operations", items: [
+        item("/institution/team", "Team & invites", UserPlus, "team"),
         item("/institution/mou", "MOU vault", FileText, "mou"),
+        item("/institution/reports", "Reports · exports", FileBarChart, "reports"),
         item("/institution/announcements", "Announcements", Megaphone, "ann"),
       ]},
     ],
@@ -46,6 +48,7 @@ export const roleConfig = {
         item("/tpo/outcomes", "Placement outcomes", BarChart3, "outcomes"),
         item("/tpo/applications", "Application pipeline", Send, "applications"),
         item("/tpo/jobs", "Active drives", Briefcase, "jobs"),
+        item("/tpo/schedule", "Interview schedule", CalendarPlus, "schedule"),
       ]},
       { title: "Talent", items: [
         item("/tpo/roster", "Student roster", Users, "roster"),
@@ -60,7 +63,9 @@ export const roleConfig = {
       ]},
       { title: "Partnerships", items: [
         item("/tpo/recruiters", "Recruiter network", Network, "rec"),
-        item("/tpo/mou", "MOU & partnership", FileText, "mou"),
+        item("/tpo/team", "Team & invites", UserPlus, "team"),
+        item("/tpo/mou", "MOU · partnership", FileText, "mou"),
+        item("/tpo/reports", "Reports · exports", FileBarChart, "reports"),
         item("/tpo/announcements", "Broadcasts", Megaphone, "ann"),
       ]},
     ],
@@ -94,6 +99,7 @@ export const roleConfig = {
       { title: "Opportunities", items: [
         item("/student/jobs", "Open drives", Briefcase, "jobs"),
         item("/student/applications", "My applications", Send, "apps"),
+        item("/student/schedule", "Interview slots", CalendarPlus, "schedule"),
         item("/student/announcements", "Announcements", Megaphone, "ann"),
       ]},
     ],
@@ -107,6 +113,7 @@ export const roleConfig = {
         item("/recruiter", "Overview", LayoutDashboard, "overview"),
         item("/recruiter/jobs", "Open roles", Briefcase, "jobs"),
         item("/recruiter/talent", "Talent pool", Target, "talent"),
+        item("/recruiter/schedule", "Interview schedule", CalendarPlus, "schedule"),
         item("/recruiter/applications", "Pipeline", Send, "apps"),
       ]},
     ],

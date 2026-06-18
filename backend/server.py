@@ -7,6 +7,7 @@ RBAC: super_admin, institution_admin, tpo, faculty, student, recruiter.
 from __future__ import annotations
 
 import os
+import io
 import uuid
 import logging
 from datetime import datetime, timezone, timedelta
@@ -19,7 +20,8 @@ load_dotenv(Path(__file__).parent / ".env")
 import httpx
 from fastapi import FastAPI, HTTPException, Request, Response, Depends, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
+from fastapi.responses import StreamingResponse
+from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorGridFSBucket
 from pydantic import BaseModel, EmailStr
 
 from seed_data import (
@@ -28,6 +30,10 @@ from seed_data import (
 )
 from notification_service import notify
 from auth import hash_password, verify_password, get_session_user, require_roles
+from reports import (
+    placement_report_pdf, training_report_pdf, department_report_pdf,
+    students_csv, applications_csv, placements_csv, build_ics,
+)
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("careeros")
@@ -41,6 +47,7 @@ DEFAULT_DEMO_PASSWORD = os.environ.get("DEFAULT_DEMO_PASSWORD", "careeros2026")
 
 client = AsyncIOMotorClient(MONGO_URL)
 db = client[DB_NAME]
+gridfs = AsyncIOMotorGridFSBucket(db, bucket_name="mou_files")
 
 app = FastAPI(title="CareerOS")
 app.add_middleware(
@@ -395,16 +402,27 @@ async def dsa_intelligence(user=Depends(get_session_user)):
     iid = user.get("institution_id")
     if not iid:
         return {"by_topic": [], "leaderboard": []}
+    # Faculty narrows to their department
+    student_match = {"institution_id": iid}
+    if user["role"] == "faculty" and user.get("department"):
+        student_match["department"] = user["department"]
+    dept_students = await db.students.find(student_match, {"_id": 0, "student_id": 1}).to_list(1000)
+    dept_sids = [s["student_id"] for s in dept_students] if user["role"] == "faculty" else None
+
+    match = {"institution_id": iid}
+    if dept_sids is not None:
+        match["student_id"] = {"$in": dept_sids}
     pipeline = [
-        {"$match": {"institution_id": iid}},
+        {"$match": match},
         {"$group": {"_id": "$topic_code", "topic_name": {"$first": "$topic_name"},
                     "total": {"$first": "$total"}, "solved": {"$sum": "$solved"},
                     "students": {"$sum": 1}}},
         {"$sort": {"_id": 1}},
     ]
     by_topic = await db.dsa_progress.aggregate(pipeline).to_list(30)
+
     leaderboard_pipe = [
-        {"$match": {"institution_id": iid}},
+        {"$match": match},
         {"$group": {"_id": "$student_id", "solved": {"$sum": "$solved"}}},
         {"$sort": {"solved": -1}},
         {"$limit": 20},
@@ -421,7 +439,10 @@ async def dsa_intelligence(user=Depends(get_session_user)):
             "roll_number": s.get("roll_number", "—"), "department": s.get("department", "—"),
             "solved": r["solved"], "readiness": min(100, round(r["solved"] / DSA_TOTAL * 100, 1)),
         })
-    return {"by_topic": by_topic, "leaderboard": leaderboard, "total_problems": DSA_TOTAL}
+    return {
+        "by_topic": by_topic, "leaderboard": leaderboard, "total_problems": DSA_TOTAL,
+        "scope": ("department:" + user["department"]) if user["role"] == "faculty" and user.get("department") else "institution",
+    }
 
 
 @app.post("/api/me/dsa/toggle")
@@ -679,17 +700,48 @@ async def upload_mou(file: UploadFile = File(...), expires_on: str = Form(...), 
     iid = user.get("institution_id") or "inst_kmit"
     content = await file.read()
     size_kb = round(len(content) / 1024, 1)
+    # Persist actual bytes in GridFS
+    gridfs_id = await gridfs.upload_from_stream(
+        f"{iid}__{file.filename}",
+        content,
+        metadata={"institution_id": iid, "uploader_user_id": user["user_id"],
+                  "content_type": file.content_type, "uploaded_at": datetime.now(timezone.utc).isoformat()},
+    )
     await db.mous.update_one({"institution_id": iid}, {"$set": {
         "institution_id": iid, "document_name": file.filename,
         "document_size_kb": size_kb, "partnership_type": partnership_type,
         "expires_on": expires_on, "signed_on": datetime.now(timezone.utc).isoformat(),
         "status": "active",
+        "gridfs_id": str(gridfs_id),
+        "content_type": file.content_type or "application/pdf",
     }}, upsert=True)
     await notify(db, event="mou_uploaded", to_email=ADMIN_EMAIL,
                  subject=f"MOU uploaded — {iid}", title="MOU received",
                  body_html=f"<p>{file.filename} ({size_kb} KB) uploaded.</p>",
                  telegram_text=f"📄 MOU · {iid}")
-    return {"ok": True, "document_name": file.filename, "size_kb": size_kb}
+    return {"ok": True, "document_name": file.filename, "size_kb": size_kb, "gridfs_id": str(gridfs_id)}
+
+
+@app.get("/api/mou/download")
+async def download_mou(user=Depends(get_session_user)):
+    iid = user.get("institution_id") or "inst_kmit"
+    if user["role"] == "super_admin":
+        iid = "inst_kmit"
+    mou = await db.mous.find_one({"institution_id": iid}, {"_id": 0})
+    if not mou or not mou.get("gridfs_id"):
+        raise HTTPException(404, "No file on record")
+    from bson import ObjectId
+    stream = await gridfs.open_download_stream(ObjectId(mou["gridfs_id"]))
+    data = await stream.read()
+
+    def gen():
+        yield data
+
+    return StreamingResponse(
+        gen(),
+        media_type=mou.get("content_type", "application/pdf"),
+        headers={"Content-Disposition": f"attachment; filename=\"{mou['document_name']}\""},
+    )
 
 
 # ============== ADMIN PANEL ==============
@@ -774,3 +826,269 @@ async def platform_stats(admin=Depends(require_roles("super_admin"))):
 async def admin_colleges(admin=Depends(require_roles("super_admin"))):
     items = await db.institutions.find({}, {"_id": 0}).to_list(500)
     return {"items": items}
+
+
+# ============== REPORTS (PDF + CSV) ==============
+def _stream(content: io.BytesIO, filename: str, media_type: str):
+    content.seek(0)
+    return StreamingResponse(
+        iter([content.read()]),
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+async def _institution_overview_for_reports(iid: str) -> dict:
+    """Lightweight version of placements_overview that doesn't require auth coupling."""
+    years = await db.year_summaries.find({"institution_id": iid}, {"_id": 0}).sort("academic_year", -1).to_list(20)
+    records = await db.placement_records.find({"institution_id": iid}, {"_id": 0}).to_list(500)
+    placed = await db.students.count_documents({"institution_id": iid, "placement.placed": True})
+    total = await db.students.count_documents({"institution_id": iid})
+    pipeline = [{"$match": {"institution_id": iid}},
+                {"$group": {"_id": "$company", "selects": {"$sum": "$selects"}, "max_ctc": {"$max": "$ctc_lpa"}}},
+                {"$sort": {"selects": -1}}, {"$limit": 15}]
+    top = await db.placement_records.aggregate(pipeline).to_list(20)
+    top = [{"company": r["_id"], "selects": r["selects"], "max_ctc": r["max_ctc"]} for r in top]
+    inst = await db.institutions.find_one({"institution_id": iid}, {"_id": 0})
+    dept = []
+    for d in (inst["departments"] if inst else []):
+        p = await db.students.count_documents({"institution_id": iid, "department": d, "placement.placed": True})
+        t = await db.students.count_documents({"institution_id": iid, "department": d})
+        dept.append({"department": d, "placed": p, "total": t})
+    return {"year_summaries": years, "records": records, "top_recruiters": top,
+            "department_breakdown": dept, "students_placed": placed, "students_total": total}
+
+
+@app.get("/api/reports/placement.pdf")
+async def report_placement_pdf(user=Depends(get_session_user)):
+    iid = user.get("institution_id") or "inst_kmit"
+    inst = await db.institutions.find_one({"institution_id": iid}, {"_id": 0}) or {}
+    overview = await _institution_overview_for_reports(iid)
+    pdf = placement_report_pdf(inst, overview)
+    return _stream(pdf, f"placement-report-{inst.get('short_name', 'institution')}.pdf", "application/pdf")
+
+
+@app.get("/api/reports/training.pdf")
+async def report_training_pdf(user=Depends(get_session_user)):
+    iid = user.get("institution_id") or "inst_kmit"
+    inst = await db.institutions.find_one({"institution_id": iid}, {"_id": 0}) or {}
+    pipeline = [{"$match": {"institution_id": iid}},
+                {"$group": {"_id": "$program_code",
+                            "avg_completion": {"$avg": "$completion_pct"},
+                            "completed": {"$sum": {"$cond": [{"$eq": ["$status", "completed"]}, 1, 0]}},
+                            "in_progress": {"$sum": {"$cond": [{"$eq": ["$status", "in_progress"]}, 1, 0]}},
+                            "enrolled": {"$sum": 1}}}]
+    by_program = await db.enrollments.aggregate(pipeline).to_list(20)
+    prog_map = {p["code"]: p for p in PROGRAMS}
+    for r in by_program:
+        meta = prog_map.get(r["_id"], {})
+        r["program_code"] = r["_id"]; r["program_name"] = meta.get("name", r["_id"])
+        r["avg_completion"] = round(r["avg_completion"] or 0, 1)
+    enroll = await db.enrollments.find({"institution_id": iid}, {"_id": 0}).sort("completion_pct", -1).limit(60).to_list(60)
+    sids = list({e["student_id"] for e in enroll})
+    students = await db.students.find({"student_id": {"$in": sids}}, {"_id": 0}).to_list(200)
+    smap = {s["student_id"]: s for s in students}
+    for e in enroll:
+        s = smap.get(e["student_id"], {})
+        e["student_name"] = s.get("name", "—"); e["roll_number"] = s.get("roll_number", "—"); e["department"] = s.get("department", "—")
+    pdf = training_report_pdf(inst, {"by_program": by_program, "rows": enroll})
+    return _stream(pdf, f"training-report-{inst.get('short_name', 'institution')}.pdf", "application/pdf")
+
+
+@app.get("/api/reports/department.pdf")
+async def report_department_pdf(user=Depends(get_session_user)):
+    iid = user.get("institution_id") or "inst_kmit"
+    inst = await db.institutions.find_one({"institution_id": iid}, {"_id": 0}) or {}
+    overview = await _institution_overview_for_reports(iid)
+    students = await db.students.find({"institution_id": iid}, {"_id": 0}).to_list(1000)
+    pdf = department_report_pdf(inst, overview, students)
+    return _stream(pdf, f"department-report-{inst.get('short_name', 'institution')}.pdf", "application/pdf")
+
+
+@app.get("/api/reports/students.csv")
+async def report_students_csv(department: Optional[str] = None, user=Depends(get_session_user)):
+    iid = user.get("institution_id") or "inst_kmit"
+    if user["role"] == "super_admin":
+        iid = "inst_kmit"
+    q = {"institution_id": iid}
+    if department:
+        q["department"] = department
+    items = await db.students.find(q, {"_id": 0}).to_list(2000)
+    buf = students_csv(items)
+    return _stream(buf, "students.csv", "text/csv")
+
+
+@app.get("/api/reports/applications.csv")
+async def report_applications_csv(user=Depends(get_session_user)):
+    iid = user.get("institution_id") or "inst_kmit"
+    items = await db.applications.find({"institution_id": iid}, {"_id": 0}).to_list(2000)
+    buf = applications_csv(items)
+    return _stream(buf, "applications.csv", "text/csv")
+
+
+@app.get("/api/reports/placements.csv")
+async def report_placements_csv(user=Depends(get_session_user)):
+    iid = user.get("institution_id") or "inst_kmit"
+    records = await db.placement_records.find({"institution_id": iid}, {"_id": 0}).to_list(2000)
+    buf = placements_csv(records)
+    return _stream(buf, "placements.csv", "text/csv")
+
+
+# ============== INTERVIEW SCHEDULING ==============
+class InterviewScheduleBody(BaseModel):
+    student_id: str
+    job_id: Optional[str] = None
+    company: str
+    role: str
+    type: Literal["Technical", "HR", "System Design", "Behavioral", "Final"] = "Technical"
+    starts_at: str  # ISO datetime
+    duration_min: int = 45
+    location: str = "Online · Zoom"
+    notes: Optional[str] = None
+
+
+@app.get("/api/interviews/schedule")
+async def list_scheduled_interviews(user=Depends(get_session_user)):
+    iid = user.get("institution_id")
+    if user["role"] == "student":
+        items = await db.interview_schedule.find({"student_id": user.get("student_id")}, {"_id": 0}).sort("starts_at", 1).to_list(60)
+    elif iid:
+        items = await db.interview_schedule.find({"institution_id": iid}, {"_id": 0}).sort("starts_at", 1).to_list(120)
+    else:
+        items = []
+    return {"items": items}
+
+
+@app.post("/api/interviews/schedule")
+async def schedule_interview(body: InterviewScheduleBody, user=Depends(require_roles("tpo", "institution_admin", "recruiter", "super_admin"))):
+    student = await db.students.find_one({"student_id": body.student_id}, {"_id": 0})
+    if not student:
+        raise HTTPException(404, "student not found")
+    start_dt = datetime.fromisoformat(body.starts_at.replace("Z", "+00:00"))
+    if start_dt.tzinfo is None:
+        start_dt = start_dt.replace(tzinfo=timezone.utc)
+    end_dt = start_dt + timedelta(minutes=body.duration_min)
+    interview_id = f"isch_{uuid.uuid4().hex[:10]}"
+    record = {
+        "interview_id": interview_id,
+        "student_id": body.student_id,
+        "student_name": student["name"],
+        "student_email": student["email"],
+        "roll_number": student["roll_number"],
+        "department": student["department"],
+        "institution_id": student["institution_id"],
+        "company": body.company,
+        "role": body.role,
+        "type": body.type,
+        "starts_at": start_dt.isoformat(),
+        "ends_at": end_dt.isoformat(),
+        "duration_min": body.duration_min,
+        "location": body.location,
+        "notes": body.notes,
+        "status": "scheduled",
+        "scheduled_by": user["user_id"],
+        "scheduled_at": datetime.now(timezone.utc).isoformat(),
+        "job_id": body.job_id,
+    }
+    await db.interview_schedule.insert_one(record)
+
+    # Build .ics + send notification with attachment
+    ics_bytes = build_ics(
+        uid=f"{interview_id}@careeros.app",
+        summary=f"{body.company} · {body.role} interview",
+        description=f"{body.type} interview with {body.company}.\nLocation: {body.location}\n{(body.notes or '')}",
+        location=body.location,
+        start_utc=start_dt,
+        end_utc=end_dt,
+        organizer_email=os.environ.get("SENDER_EMAIL", "careeros.notify@careeros.app"),
+        attendee_emails=[student["email"]],
+    )
+    await notify(
+        db,
+        event="interview_scheduled",
+        to_email=student["email"],
+        subject=f"Interview scheduled — {body.company}",
+        title=f"You have an interview with {body.company}",
+        body_html=(f"<p>Hi {student['name'].split()[0]},</p>"
+                   f"<p>Your <b>{body.type}</b> interview for the <b>{body.role}</b> role at <b>{body.company}</b> is scheduled.</p>"
+                   f"<p><b>When:</b> {start_dt.strftime('%A, %d %B %Y · %H:%M UTC')}<br/>"
+                   f"<b>Duration:</b> {body.duration_min} min<br/>"
+                   f"<b>Where:</b> {body.location}</p>"
+                   f"<p>The calendar invite is attached. Good luck.</p>"),
+        telegram_text=f"📅 Interview · {student['name']} · {body.company} · {start_dt.strftime('%d %b %H:%M UTC')}",
+        attachments=[{"content": ics_bytes, "filename": "careeros-interview.ics", "mime_type": "text/calendar"}],
+    )
+
+    # Update related application to Interview stage if a job_id is provided
+    if body.job_id:
+        await db.applications.update_one(
+            {"student_id": body.student_id, "job_id": body.job_id},
+            {"$set": {"stage": "Interview", "next_step_at": start_dt.isoformat()}},
+        )
+    return {"interview_id": interview_id, "starts_at": record["starts_at"]}
+
+
+@app.delete("/api/interviews/schedule/{interview_id}")
+async def cancel_interview(interview_id: str, user=Depends(require_roles("tpo", "institution_admin", "recruiter", "super_admin"))):
+    await db.interview_schedule.update_one({"interview_id": interview_id},
+                                           {"$set": {"status": "cancelled"}})
+    return {"ok": True}
+
+
+# ============== MULTI-USER INVITES ==============
+class InviteBody(BaseModel):
+    email: EmailStr
+    name: str
+    role: Literal["tpo", "institution_admin", "faculty", "coordinator"] = "faculty"
+    department: Optional[str] = None
+    institution_id: Optional[str] = None  # super_admin can override
+
+
+@app.post("/api/invite")
+async def invite_user(body: InviteBody, user=Depends(require_roles("super_admin", "tpo", "institution_admin"))):
+    iid = body.institution_id if user["role"] == "super_admin" else user.get("institution_id")
+    if not iid:
+        raise HTTPException(400, "institution_id required")
+    existing = await db.users.find_one({"email": body.email.lower()})
+    if existing:
+        raise HTTPException(409, "User already exists")
+    pw = DEFAULT_DEMO_PASSWORD  # auto-set; user changes after first login (out of scope)
+    new = _new_user(email=body.email, name=body.name, role=body.role,
+                    institution_id=iid, password=pw, approved=True, department=body.department)
+    await db.users.insert_one(new)
+    inst = await db.institutions.find_one({"institution_id": iid}, {"_id": 0}) or {}
+    await notify(
+        db, event="user_invited",
+        to_email=body.email,
+        subject=f"Welcome to CareerOS — {inst.get('name', 'your institution')}",
+        title="You've been invited to CareerOS",
+        body_html=(f"<p>Hi {body.name},</p>"
+                   f"<p>{user['name']} has invited you to <b>{inst.get('name')}</b>'s placement command center as a <b>{body.role.replace('_', ' ')}</b>.</p>"
+                   f"<p>Sign in at <a href='https://career-os-nexus.preview.emergentagent.com/login'>CareerOS</a> using:</p>"
+                   f"<p><b>Email:</b> {body.email}<br/><b>Temporary password:</b> {pw}</p>"
+                   f"<p>Please change your password after first login.</p>"),
+        telegram_text=f"👥 New invite · {body.email} → {inst.get('short_name', iid)} · {body.role}",
+    )
+    return {"user_id": new["user_id"], "email": body.email, "temp_password": pw}
+
+
+@app.get("/api/institution/users")
+async def list_institution_users(user=Depends(require_roles("tpo", "institution_admin", "super_admin"))):
+    iid = user.get("institution_id")
+    if user["role"] == "super_admin":
+        iid = iid or "inst_kmit"
+    items = await db.users.find({"institution_id": iid}, {"_id": 0, "password_hash": 0}).to_list(200)
+    return {"items": items}
+
+
+@app.delete("/api/institution/users/{user_id}")
+async def remove_institution_user(user_id: str, user=Depends(require_roles("tpo", "institution_admin", "super_admin"))):
+    if user_id == user["user_id"]:
+        raise HTTPException(400, "Cannot remove yourself")
+    target = await db.users.find_one({"user_id": user_id})
+    if not target:
+        raise HTTPException(404, "not found")
+    if user["role"] != "super_admin" and target.get("institution_id") != user.get("institution_id"):
+        raise HTTPException(403, "forbidden")
+    await db.users.delete_one({"user_id": user_id})
+    return {"ok": True}

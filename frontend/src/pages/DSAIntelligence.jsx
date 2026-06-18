@@ -14,11 +14,22 @@ export default function DSAIntelligence() {
         <div className="col-span-12 md:col-span-8 editorial p-10 lg:p-12">
           <div className="font-mono text-[10px] tracking-[0.28em] text-ink-400">§ DSA · STRIVER A2Z</div>
           <h1 className="font-display text-5xl md:text-6xl tracking-tightest mt-3" data-testid="dsa-heading">
-            Institutional DSA <span className="text-accent">readiness map.</span>
+            {d.scope?.startsWith("department:") ? (
+              <>Department <span className="text-accent">DSA pulse.</span></>
+            ) : (
+              <>Institutional DSA <span className="text-accent">readiness map.</span></>
+            )}
           </h1>
           <p className="font-serif text-lg text-ink-500 mt-3 max-w-xl">
-            Every Striver topic. Every student. Every solve. Use the topic map to find weak areas and the leaderboard to find your top contenders.
+            {d.scope?.startsWith("department:")
+              ? `Scoped to your department (${d.scope.split(":")[1]}). Every Striver topic, every student you teach.`
+              : "Every Striver topic. Every student. Every solve. Use the topic map to find weak areas and the leaderboard to find your top contenders."}
           </p>
+          {d.scope?.startsWith("department:") && (
+            <div className="mt-4 inline-flex pill" data-testid="dsa-scope-badge" style={{ color: "#4a5d3a", borderColor: "#4a5d3a" }}>
+              FACULTY SCOPE · {d.scope.split(":")[1]}
+            </div>
+          )}
         </div>
         <div className="col-span-12 md:col-span-4 editorial bg-ink-900 text-bone-100 p-10">
           <div className="font-mono text-[10px] tracking-[0.28em] text-bone-100/40">PROBLEMS · SHEET TOTAL</div>

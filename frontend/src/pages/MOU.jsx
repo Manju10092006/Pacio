@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
-import { api } from "../lib/api";
+import { api, apiUrl } from "../lib/api";
 import { toast } from "sonner";
-import { Upload, FileText, Calendar } from "lucide-react";
+import { Upload, FileText, Calendar, Download } from "lucide-react";
 
 export default function MOU() {
   const [mou, setMou] = useState(null);
@@ -66,6 +66,12 @@ export default function MOU() {
           <FileText size={32} className="mt-4 text-accent" />
           <div className="font-display text-2xl tracking-tight mt-4 break-all">{mou?.document_name || "No file uploaded"}</div>
           <div className="text-bone-100/60 text-sm mt-2">{mou?.document_size_kb || 0} KB · signed {mou?.signed_on?.slice(0, 10)}</div>
+          {mou?.gridfs_id && (
+            <a href={apiUrl("/mou/download")} download={mou.document_name} data-testid="mou-download-btn"
+              className="mt-5 inline-flex items-center gap-2 border border-accent text-accent px-4 py-2 text-xs hover:bg-accent hover:text-bone-100 transition-colors">
+              <Download size={12} /> Download original
+            </a>
+          )}
           <div className="hairline my-6 border-bone-100/20" />
           <div className="font-mono text-[10px] tracking-[0.24em] text-bone-100/40">PAYOUT</div>
           <div className="font-serif text-lg mt-2">{mou?.payout_status || "—"}</div>

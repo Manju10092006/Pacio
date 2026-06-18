@@ -41,3 +41,9 @@ htmlcov/
 .env
 .env.local
 .env.*.local
+.env.*
+*.env
+credentials.json
+*.pem
+*.key
+.credentials

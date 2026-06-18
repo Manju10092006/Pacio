@@ -34,6 +34,9 @@ from reports import (
     placement_report_pdf, training_report_pdf, department_report_pdf,
     students_csv, applications_csv, placements_csv, build_ics,
 )
+from ai_service import ai_interview_feedback, ai_ats_score
+from ws_manager import manager as ws_manager
+from fastapi import WebSocket, WebSocketDisconnect
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("careeros")
@@ -659,6 +662,17 @@ async def update_application(application_id: str, body: dict, user=Depends(requi
     if not update:
         return {"updated": 0}
     r = await db.applications.update_one({"application_id": application_id}, {"$set": update})
+    # Broadcast live update
+    app_doc = await db.applications.find_one({"application_id": application_id}, {"_id": 0})
+    if app_doc:
+        await ws_manager.broadcast(app_doc["institution_id"], {
+            "type": "application.updated",
+            "application_id": application_id,
+            "stage": app_doc.get("stage"),
+            "student_name": app_doc.get("student_name"),
+            "company": app_doc.get("company"),
+            "ts": datetime.now(timezone.utc).isoformat(),
+        })
     return {"updated": r.modified_count}
 
 
@@ -1046,6 +1060,16 @@ async def schedule_interview(body: InterviewScheduleBody, user=Depends(require_r
             {"student_id": body.student_id, "job_id": body.job_id},
             {"$set": {"stage": "Interview", "next_step_at": start_dt.isoformat()}},
         )
+
+    # Broadcast live update to anyone watching this institution
+    await ws_manager.broadcast(student["institution_id"], {
+        "type": "interview.scheduled",
+        "interview_id": interview_id,
+        "student_name": student["name"],
+        "company": body.company,
+        "starts_at": record["starts_at"],
+        "ts": datetime.now(timezone.utc).isoformat(),
+    })
     return {"interview_id": interview_id, "starts_at": record["starts_at"]}
 
 
@@ -1053,7 +1077,146 @@ async def schedule_interview(body: InterviewScheduleBody, user=Depends(require_r
 async def cancel_interview(interview_id: str, user=Depends(require_roles("tpo", "institution_admin", "recruiter", "super_admin"))):
     await db.interview_schedule.update_one({"interview_id": interview_id},
                                            {"$set": {"status": "cancelled"}})
+    sched = await db.interview_schedule.find_one({"interview_id": interview_id}, {"_id": 0})
+    if sched:
+        await ws_manager.broadcast(sched["institution_id"], {
+            "type": "interview.cancelled",
+            "interview_id": interview_id,
+            "ts": datetime.now(timezone.utc).isoformat(),
+        })
     return {"ok": True}
+
+
+# ============== AI: INTERVIEW FEEDBACK ==============
+@app.post("/api/interviews/{interview_id}/ai-feedback")
+async def regenerate_ai_feedback(interview_id: str, user=Depends(get_session_user)):
+    report = await db.interview_reports.find_one({"interview_id": interview_id}, {"_id": 0})
+    if not report:
+        raise HTTPException(404, "interview report not found")
+    if user["role"] not in ("super_admin", "tpo", "institution_admin", "faculty") and \
+       user.get("student_id") != report["student_id"]:
+        raise HTTPException(403, "forbidden")
+    # Hydrate names if not present
+    if not report.get("student_name"):
+        s = await db.students.find_one({"student_id": report["student_id"]}, {"_id": 0})
+        if s:
+            report["student_name"] = s.get("name")
+            report["roll_number"] = s.get("roll_number")
+            report["department"] = s.get("department")
+    result = await ai_interview_feedback(report)
+    await db.interview_reports.update_one(
+        {"interview_id": interview_id},
+        {"$set": {"ai_feedback": result["feedback"], "ai_source": result["source"],
+                  "ai_model": result.get("model"), "ai_generated_at": datetime.now(timezone.utc).isoformat()}},
+    )
+    return result
+
+
+# ============== AI: REAL RESUME ATS ==============
+def _extract_pdf_text(content: bytes) -> str:
+    try:
+        from pypdf import PdfReader
+        from io import BytesIO
+        reader = PdfReader(BytesIO(content))
+        return "\n".join((page.extract_text() or "") for page in reader.pages)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("PDF parse failed: %s", exc)
+        return ""
+
+
+@app.post("/api/ats/upload")
+async def upload_resume(
+    file: UploadFile = File(...),
+    job_description: str = Form(""),
+    user=Depends(get_session_user),
+):
+    """Student (or staff on behalf of) uploads a PDF resume; we extract text and score it."""
+    content = await file.read()
+    size_kb = round(len(content) / 1024, 1)
+    text = _extract_pdf_text(content)
+    if not text and file.content_type and "text" in file.content_type:
+        text = content.decode("utf-8", errors="ignore")
+    scoring = await ai_ats_score(text, job_description)
+
+    # Persist to GridFS for download
+    gridfs_id = await gridfs.upload_from_stream(
+        f"resume_{user['user_id']}_{file.filename}",
+        content,
+        metadata={"user_id": user["user_id"], "kind": "resume",
+                  "uploaded_at": datetime.now(timezone.utc).isoformat()},
+    )
+    student_id = user.get("student_id")
+    if not student_id and user["role"] != "student":
+        # Allow TPO/Faculty to score on a target student via query param
+        student_id = None
+    record = {
+        "ats_id": f"ats_{uuid.uuid4().hex[:10]}",
+        "student_id": student_id,
+        "user_id": user["user_id"],
+        "institution_id": user.get("institution_id"),
+        "score": scoring.get("ats_score"),
+        "keyword_match_pct": scoring.get("keyword_match_pct"),
+        "format_score": scoring.get("format_score"),
+        "missing_keywords": scoring.get("missing_keywords", []),
+        "strengths": scoring.get("strengths", []),
+        "weaknesses": scoring.get("weaknesses", []),
+        "verdict": scoring.get("verdict"),
+        "ai_source": scoring.get("source", "fallback"),
+        "ai_model": scoring.get("model"),
+        "uploaded_filename": file.filename,
+        "file_size_kb": size_kb,
+        "gridfs_id": str(gridfs_id),
+        "extracted_chars": len(text),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.ats_reports.insert_one(record)
+    record.pop("_id", None)
+    return record
+
+
+@app.get("/api/ats/me/latest")
+async def my_latest_ats(user=Depends(get_session_user)):
+    sid = user.get("student_id")
+    if not sid:
+        return {"item": None}
+    item = await db.ats_reports.find_one({"student_id": sid}, {"_id": 0}, sort=[("created_at", -1)])
+    return {"item": item}
+
+
+# ============== WEBSOCKET: LIVE UPDATES ==============
+@app.websocket("/ws/live")
+async def ws_live(websocket: WebSocket, institution_id: Optional[str] = None, token: Optional[str] = None):
+    # Auth: verify session token (cookies aren't readable cross-domain by browser WS in many cases,
+    # so we accept ?token= as query param too).
+    if not token:
+        token = websocket.cookies.get("session_token")
+    if not token:
+        await websocket.close(code=4401); return
+    sess = await db.user_sessions.find_one({"session_token": token}, {"_id": 0})
+    if not sess:
+        await websocket.close(code=4401); return
+    user = await db.users.find_one({"user_id": sess["user_id"]}, {"_id": 0, "password_hash": 0})
+    if not user:
+        await websocket.close(code=4401); return
+    room = institution_id or user.get("institution_id") or "global"
+    # super_admin can subscribe to any room they ask for; others scoped to their own institution
+    if user["role"] != "super_admin" and room != user.get("institution_id"):
+        await websocket.close(code=4403); return
+    await ws_manager.connect(room, websocket)
+    try:
+        # Send a welcome packet so the client knows it's live
+        await websocket.send_json({"type": "hello", "room": room,
+                                   "user": user.get("name"), "role": user["role"],
+                                   "ts": datetime.now(timezone.utc).isoformat()})
+        while True:
+            msg = await websocket.receive_text()
+            # Echo keep-alives if needed
+            if msg == "ping":
+                await websocket.send_text("pong")
+    except WebSocketDisconnect:
+        pass
+    finally:
+        await ws_manager.disconnect(room, websocket)
 
 
 # ============== MULTI-USER INVITES ==============

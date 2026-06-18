@@ -28,9 +28,10 @@ STRIVER_TOPICS = [
     {"code": "DP",           "name": "Dynamic programming",               "problems": 56, "order": 16},
     {"code": "TRIES",        "name": "Tries",                             "problems": 7,  "order": 17},
     {"code": "STR_ADV",      "name": "Strings — advanced",                "problems": 9,  "order": 18},
-    {"code": "MATHS",        "name": "Maths",                             "problems": 8,  "order": 19},
+    {"code": "MATHS",        "name": "Maths",                             "problems": 25, "order": 19},
 ]
-DSA_TOTAL = sum(t["problems"] for t in STRIVER_TOPICS)  # 455
+DSA_TOTAL = sum(t["problems"] for t in STRIVER_TOPICS)  # = 455 (Striver A2Z official total)
+assert DSA_TOTAL == 455, f"Striver A2Z total drift: {DSA_TOTAL}"
 
 APTITUDE_SECTIONS = [
     {"code": "QUANT", "name": "Quantitative Aptitude", "topics": ["Numbers", "Percentages", "Profit & Loss", "Time-Speed-Distance", "Time & Work", "Ratios", "Permutations & Combinations", "Probability"]},

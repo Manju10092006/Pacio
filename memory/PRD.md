@@ -1,82 +1,61 @@
-# CareerOS · Campus Intelligence — PRD
+# CareerOS · Campus Intelligence — PRD (v2)
 
 ## Original problem statement
-Build a world-class B2B SaaS product called **CareerOS Campus Intelligence** — an AI-powered Placement Intelligence Platform for colleges, TPOs, HODs, placement coordinators and Skill Tank administrators. Editorial light theme. Premium, GSAP-heavy landing. Real KMIT placement data (kmit.in/placements/placement.php) seeded across 2017–18 → 2025–26. Top 7 must-have features built end-to-end.
+Build CareerOS — the operating system for placement intelligence. Multi-role (super_admin, institution_admin, tpo, faculty, student, recruiter), 13 modules (Student/Training/DSA/Aptitude/Mock Interview/ATS/Placement/Recruiter/Applications/Interview scheduling/Announcements/Reports), real KMIT placement data (2017-18 → 2025-26), editorial light-theme premium $100M-feel SaaS, GSAP cinematic landing, JWT auth + RBAC, distinct role-based workspaces. Fix the v1 bug where every role landed on the same dashboard.
 
-## User personas
-1. **Super Admin** (Skill Tank platform team) — approves colleges, monitors fan-out, overrides data.
-2. **TPO** (Training & Placement Officer) — operates the institutional command center.
-3. **HOD** (Department Head) — department-scoped roster + outcomes view.
-4. **Coordinator** — operational support for TPO.
+## Roles → Workspaces
+| Role | Home | Modules accessible |
+| --- | --- | --- |
+| super_admin | `/platform` | Institutions, Recruiter network, Placement layer, Broadcasts, Notification log |
+| institution_admin | `/institution` | Overview, Profile, Departments, Programs, MOU, Announcements |
+| tpo | `/tpo` | Mission control, Outcomes, Applications, Drives, Roster, Cohorts, Training, DSA, Aptitude, ATS, Interviews, Recruiters, MOU, Broadcasts |
+| faculty | `/faculty` | My batches, Students, Training, DSA, Aptitude, Interviews |
+| student | `/student` | Personal home, DSA tracker, Open drives, My applications, Announcements |
+| recruiter | `/recruiter` | Overview, Open roles, Talent pool, Pipeline |
 
-## Core requirements (static)
-- Light-theme, editorial, premium SaaS aesthetic.
-- React + FastAPI + MongoDB stack.
-- Emergent-managed Google OAuth + 4-role RBAC + admin approval gating.
-- Real KMIT placement data seeded on first boot, no empty states.
-- SendGrid + Telegram notification fan-out (simulated when keys absent, logged in admin panel).
-- GSAP-driven landing page with progressive scroll storytelling.
+## What's been implemented (v2 — 2026-01-18)
+### Backend (`/app/backend/`)
+- `server.py` — 50+ endpoints across 13 modules, full RBAC, institution isolation
+- `auth.py` — bcrypt + RBAC dependency (require_roles, require_same_institution)
+- `seed_data.py` — 6 institutions across streams (Engineering, Management, Pharmacy, Medical, Degree, Diploma), 470 students with full profiles, 19 Striver A2Z topics (455 problems), 4 aptitude sections, 22 recruiters, ~70 jobs, ~880 applications, 7 announcements, MOU + comm log
+- `notification_service.py` — SendGrid + Telegram fan-out (simulated when keys absent — logged to admin notification feed)
+- Real KMIT placement records 2017-18 → 2025-26 (148 cos / 702 offers / ₹8.26L avg / ₹80L Amazon top in 2025-26)
+- 7 seeded demo users (all password `careeros2026`): admin, institution, tpo, faculty, student, recruiter + tpo@vasavi.ac.in (pending, demos approval flow)
 
-## What's been implemented — v1.1 (2026-01-18 · evening)
-- **DESIGN PIVOT 2** — Brought back the editorial light theme (per user feedback that orange-black wasn't premium enough) with a refined palette: warm cream `#F4F0E8` paper, rich near-black `#0E0E10` ink, **electric cobalt `#1538C8`** signature accent (not generic SaaS blue — single saturated solid), molten amber `#D97706` secondary. Headings use italic Fraunces serif inside Cabinet Grotesk display (e.g. "Good morning, *Dr. Neil*.")
-- **LANDING UPGRADE** — Full rewrite:
-  - GSAP twinkling **starfield** (90 animated cobalt stars) over the hero
-  - Real **brand SVG logos** (Amazon, Google, Microsoft, Salesforce, Adobe, ServiceNow, Cisco, Oracle, Intuit, Deloitte, Accenture, Infosys, Walmart, Nvidia, SAP, Uber, Atlassian, TCS) via simpleicons CDN — monochromatic ink filter on the marquee
-  - **Magnetic CTA buttons** that follow the cursor
-  - Scroll-driven H1 scale-down + opacity fade
-  - Parallax depth on the 9-year decade-of-data tiles
-  - Pinned 7-feature reveal with staggered slide-in
-  - Italic-serif word flourishes throughout ("placement intelligence.", "institutional", "the most selective", "outcomes.")
-  - Animated NumberTickers (GSAP scroll-triggered)
-- **DASHBOARD POLISH** — Cobalt + amber chart colors, italic serif name flourish in Overview greeting, sparkline gradient updated to cobalt.
-## What's been implemented — v1.0 (2026-01-18 · morning)
-- **Backend** (`/app/backend/server.py`) — 22/22 backend tests passing
-  - Cookie-based session auth + `/api/auth/dev-login` for instant role testing
-  - `/api/auth/session` exchanges Emergent OAuth `session_id` for cookie
-  - Feature endpoints: signup, college, students (CRUD + search), cohorts, placements/overview, training/completion, MOU upload/get
-  - Admin endpoints: pending-signups, approve/reject, all colleges, notification log, test-notification
-  - Public `/api/public/landing-stats` for landing page
-- **Notification service** (`notification_service.py`) — SendGrid + Telegram fan-out, logs every event to `notification_log` (status: sent/simulated)
-- **Seed data** (`seed_data.py`) — KMIT real placement records (90+ rows across 9 academic years), aggregate year summaries, 120 synthetic students across CSE/IT/CSE-AIML/CSE-DS, 5 cohorts (CRT/IM/FDP/DSA/APT), MOU, communication log, 5 demo users
-- **Frontend** — Editorial light theme, Fraunces + Cabinet Grotesk + JetBrains Mono typography, accent #FF3B00
-  - Landing page (`Landing.jsx`) — full-screen hero with GSAP slice reveals, scramble text, recruiter marquee, parallax stats strip, pinned 7-feature reveal, recruiter ledger, dark CTA section
-  - Auth: Login (Google + demo dropdown), AuthCallback, OnboardingPending (TPO signup form)
-  - Dashboard shell (`DashboardLayout.jsx`) with sidebar nav
-  - 7 feature pages: Overview (KPI bento + YoY bar chart + top recruiters + dept breakdown), CollegeProfile (editable), StudentRoster (search/filter/add), Cohorts (5 cards with progress rings), Outcomes (CTC line chart + recruiter ledger), Training (avg completion + 80-row student table), MOU (renewal countdown + upload + seat/revenue stats)
-  - Super Admin Panel — pending approvals table, all colleges, live notification fan-out log, test-trigger button
+### Frontend (`/app/frontend/src/`)
+- `pages/Landing.jsx` — cinematic light-theme landing with GSAP char-by-char hero reveal, pinned story section (4 pain points), 10-card module bento, decade-of-placements grid, recruiter ledger, dark CTA
+- `pages/Login.jsx` — email+password + 6 demo buttons (one per role) + Google OAuth + 30ms wait fix for setState→navigate race
+- `layouts/RoleLayout.jsx` + `layouts/roleConfig.js` — generic dashboard shell, sidebar configured per role with section groupings and role-tinted accent
+- `App.js` — ROLE_HOME redirect map ensures each role lands in their own workspace
+- Module pages: PlatformControl, Overview (TPO/Institution), StudentHome, StudentDSA (interactive +/-), DSAIntelligence, AptitudeIntelligence, ATSIntelligence, InterviewIntelligence, Applications (pipeline + stage PATCH), Jobs, Recruiters, RecruiterHome, TalentPool, Announcements, MOU, CollegeProfile, AdminPanel
+- Typography: Cabinet Grotesk display, Fraunces serif, JetBrains Mono numerals, Satoshi body; accent #FF3B00 (light) or per-role tint
 
-## Testing
-- Backend: 22/22 pytest tests pass (`/app/backend/tests/test_careeros_backend.py`)
-- Frontend: All pages render with real data; demo login → dashboard works after AuthProvider state fix; super-admin approval flow works end-to-end
+## Testing (`/app/test_reports/iteration_2.json`)
+- Backend pytest: 32/32 PASS (after DSA_TOTAL fix)
+- Frontend: All 6 role logins land on the correct workspace; role isolation enforced (TPO blocked from /platform); student DSA tracker fully interactive; KPI testids present
 
-## Demo accounts (in `/app/memory/test_credentials.md`)
-- `admin@careeros.app` (super_admin)
-- `tpo@kmit.in` (TPO, KMIT)
-- `hod.cse@kmit.in` (HOD)
-- `coord@kmit.in` (Coordinator)
-- `tpo@vasavi.ac.in` (pending TPO — demos approval flow)
+## Known issues
+- Mobile sidebar exists but burger menu UX is rough
+- MOU upload stores metadata only (no GridFS); fine for demos
+- Recruiter pipeline only shows aggregate (not yet filtered per recruiter_id when multiple recruiter accounts exist)
 
-## Prioritized backlog
-### P0 (none)
+## P1 backlog (next session)
+- PDF/CSV exports for reports
+- Real-time interview scheduling with calendar
+- Faculty-scoped DSA/aptitude views (currently institution-wide)
+- Multi-user invites per institution
+- Direct chat between TPO ↔ Skill Tank account manager
+- Wire actual SendGrid + Telegram keys to flip simulated → sent
+- Mobile burger drawer polish
 
-### P1 — next session
-- Add the remaining 8 must-have features per problem statement (revenue-share visibility detail screen, comm log UI, multi-user invites, renewal alerts cron, downloadable PDF/CSV reports, FDP session scheduler, automated triggers on placement/FDP events with real keys, central admin override for college rosters).
-- Mobile burger menu for the dashboard sidebar (currently `hidden lg:flex`).
-- Persist uploaded MOU file bytes (GridFS or S3) — current upload only stores metadata.
-- Pydantic body model for `POST /api/students` to validate.
-
-### P2 — good-to-haves
-- Anonymized college benchmarking
-- Direct chat between TPO and Skill Tank AM
-- Event/workshop request flow
-- Student drill-down route
+## P2 backlog
+- Anonymized institution benchmarking
 - Co-branded report templates
-- Weekly digest email
-- Company-college historical join view
-- College leaderboard
+- Weekly digest emails
 - MOU e-signature
-- Seat/budget tracking widget
+- Workshop request flow from TPO portal
+- Student drill-down route from any roster row
 
-### Deploy
-- Vercel for frontend, Render/Railway for backend, MongoDB Atlas free tier
-- Set `SENDGRID_API_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` env vars to activate real notifications
+## Deployment
+- Frontend → Vercel; Backend → Render/Railway; MongoDB → Atlas free
+- Required env: `MONGO_URL`, `DB_NAME`, `JWT_SECRET`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `DEFAULT_DEMO_PASSWORD`, `EMERGENT_AUTH_URL`. Optional: `SENDGRID_API_KEY`, `SENDER_EMAIL`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`

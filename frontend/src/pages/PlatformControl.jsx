@@ -16,12 +16,12 @@ export default function PlatformControl() {
   }, []);
 
   const kpis = [
-    { label: "Active institutions", val: stats?.institutions ?? "—", sub: "Across 6 streams", icon: Building2 },
-    { label: "Pending signups", val: stats?.pending_signups ?? "—", sub: "Awaiting review", icon: Activity },
-    { label: "Total students", val: stats?.students ?? "—", sub: "On platform", icon: Users },
-    { label: "Open drives", val: stats?.jobs_open ?? "—", sub: "Across recruiters", icon: Briefcase },
-    { label: "Applications", val: stats?.applications ?? "—", sub: "Through pipeline", icon: Send },
-    { label: "Estimated MRR (₹)", val: stats?.estimated_mrr_inr?.toLocaleString?.() ?? "—", sub: "Revenue share proxy", icon: Award },
+    { key: "kpi-institutions", label: "Active institutions", val: stats?.institutions ?? "—", sub: "Across 6 streams", icon: Building2 },
+    { key: "kpi-pending", label: "Pending signups", val: stats?.pending_signups ?? "—", sub: "Awaiting review", icon: Activity },
+    { key: "kpi-students", label: "Total students", val: stats?.students ?? "—", sub: "On platform", icon: Users },
+    { key: "kpi-jobs", label: "Open drives", val: stats?.jobs_open ?? "—", sub: "Across recruiters", icon: Briefcase },
+    { key: "kpi-applications", label: "Applications", val: stats?.applications ?? "—", sub: "Through pipeline", icon: Send },
+    { key: "kpi-mrr", label: "Estimated MRR (₹)", val: stats?.estimated_mrr_inr?.toLocaleString?.() ?? "—", sub: "Revenue share proxy", icon: Award },
   ];
 
   return (
@@ -43,7 +43,7 @@ export default function PlatformControl() {
       {/* KPI grid */}
       <div className="grid grid-cols-12 gap-3" data-testid="platform-kpis">
         {kpis.map((k, i) => (
-          <div key={k.label} className={`${i === 0 ? "col-span-12 md:col-span-6 row-span-2" : "col-span-12 md:col-span-3"} editorial p-7`}>
+          <div key={k.label} data-testid={k.key} className={`${i === 0 ? "col-span-12 md:col-span-6 row-span-2" : "col-span-12 md:col-span-3"} editorial p-7`}>
             <div className="flex items-center justify-between text-ink-400">
               <div className="font-mono text-[10px] tracking-[0.24em] flex items-center gap-2"><k.icon size={14} /> {k.label.toUpperCase()}</div>
             </div>

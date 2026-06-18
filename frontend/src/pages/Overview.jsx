@@ -29,7 +29,7 @@ export default function Overview() {
         <div className="col-span-12 md:col-span-8 editorial p-10 lg:p-14 relative overflow-hidden">
           <div className="font-mono text-[10px] tracking-[0.28em] text-ink-400">§ MISSION CONTROL · LIVE</div>
           <h1 className="font-display text-5xl md:text-7xl tracking-tightest mt-3 leading-[0.95]" data-testid="overview-heading">
-            Good morning, <span className="text-accent">{user?.name?.split(" ")[0] || "TPO"}.</span>
+            Good morning, <span className="text-accent">{(user?.name || "TPO").split(/[\s.]+/).find((w) => w && w.length > 1 && !/^(Dr|Mr|Mrs|Ms|Prof)$/i.test(w)) || "TPO"}.</span>
           </h1>
           <p className="font-serif text-lg text-ink-500 mt-3 max-w-2xl">
             Here's what's happening across your placement pipeline this morning.
@@ -40,10 +40,10 @@ export default function Overview() {
             <span className="pill">avg ₹{latest?.avg_lpa?.toFixed(2)} L</span>
           </div>
         </div>
-        <div className="col-span-12 md:col-span-4 editorial bg-ink-900 text-bone-100 p-8 lg:p-10 flex flex-col justify-between">
+        <div className="col-span-12 md:col-span-4 editorial bg-ink-900 text-bone-100 p-8 lg:p-10 flex flex-col justify-between" data-testid="kpi-top-right">
           <div>
             <div className="font-mono text-[10px] tracking-[0.28em] text-bone-100/40">TOP OFFER · CURRENT YEAR</div>
-            <div className="font-display text-[8vw] md:text-[6vw] tracking-tightest mt-3 leading-[0.9] text-accent">₹{latest?.top_offer_lpa || 0}<span className="text-bone-100">L</span></div>
+            <div className="font-display text-[8vw] md:text-[6vw] tracking-tightest mt-3 leading-[0.9] text-accent tnum">₹{latest?.top_offer_lpa || 0}<span className="text-bone-100">L</span></div>
             <div className="text-bone-100/70 mt-2">{latest?.top_company} · SDE</div>
           </div>
           <div className="hairline border-bone-100/20 my-5" />

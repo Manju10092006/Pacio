@@ -141,11 +141,18 @@ async def _startup():
                 password=DEFAULT_DEMO_PASSWORD if d["role"] != "super_admin" else ADMIN_PASSWORD,
                 approved=d.get("approved", True),
             )
-            # Bind student demo to a real seeded student row so personal dashboard works
+            # Bind student demo to a real seeded student row AND patch the student record
+            # to match the User's display name so UI stays consistent across views.
             if d["role"] == "student":
-                real_stu = await db.students.find_one({"institution_id": "inst_kmit", "department": "CSE"}, {"_id": 0})
+                real_stu = await db.students.find_one(
+                    {"institution_id": "inst_kmit", "department": "CSE"}, {"_id": 0}
+                )
                 if real_stu:
                     new["student_id"] = real_stu["student_id"]
+                    await db.students.update_one(
+                        {"student_id": real_stu["student_id"]},
+                        {"$set": {"name": d["name"], "email": d["email"]}},
+                    )
             try:
                 await db.users.insert_one(new)
             except Exception as e:
@@ -155,6 +162,20 @@ async def _startup():
             if not existing.get("password_hash"):
                 pw = ADMIN_PASSWORD if d["role"] == "super_admin" else DEFAULT_DEMO_PASSWORD
                 await db.users.update_one({"email": d["email"]}, {"$set": {"password_hash": hash_password(pw)}})
+            # Ensure student↔student_id link is set and student name matches
+            if d["role"] == "student" and not existing.get("student_id"):
+                real_stu = await db.students.find_one(
+                    {"institution_id": "inst_kmit", "department": "CSE"}, {"_id": 0}
+                )
+                if real_stu:
+                    await db.users.update_one(
+                        {"email": d["email"]},
+                        {"$set": {"student_id": real_stu["student_id"]}},
+                    )
+                    await db.students.update_one(
+                        {"student_id": real_stu["student_id"]},
+                        {"$set": {"name": d["name"], "email": d["email"]}},
+                    )
 
     # Pending college doc for approval flow
     if not await db.institutions.find_one({"institution_id": "inst_vasavi_pending"}):

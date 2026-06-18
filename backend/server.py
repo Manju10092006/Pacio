@@ -1,8 +1,8 @@
-"""CareerOS Campus Intelligence — FastAPI backend.
+"""CareerOS Campus Intelligence — v2 backend.
 
-Single-file API for the 7 must-have features + central admin panel + auth.
-Auth: Emergent-managed Google OAuth (see /app/auth_testing.md).
-Notifications: SendGrid + Telegram fan-out (notification_service.py).
+Multi-role, multi-institution platform with 13 modules.
+Auth: bcrypt password login + Emergent Google OAuth + cookie session token.
+RBAC: super_admin, institution_admin, tpo, faculty, student, recruiter.
 """
 from __future__ import annotations
 
@@ -13,19 +13,22 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional, Literal
 
-import httpx
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Request, Response, Cookie, Header, UploadFile, File, Form, Depends
+load_dotenv(Path(__file__).parent / ".env")
+
+import httpx
+from fastapi import FastAPI, HTTPException, Request, Response, Depends, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 from motor.motor_asyncio import AsyncIOMotorClient
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr
 
-from seed_data import seed_payload, KMIT_PLACEMENT_RECORDS, YEAR_AGGREGATES, DEPARTMENTS, PROGRAMS
+from seed_data import (
+    seed_payload, STRIVER_TOPICS, DSA_TOTAL, APTITUDE_SECTIONS, INSTITUTIONS,
+    PROGRAMS, KMIT_PLACEMENT_RECORDS, YEAR_AGGREGATES,
+)
 from notification_service import notify
+from auth import hash_password, verify_password, get_session_user, require_roles
 
-ROOT = Path(__file__).parent
-load_dotenv(ROOT / ".env")
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("careeros")
 
@@ -33,224 +36,38 @@ MONGO_URL = os.environ["MONGO_URL"]
 DB_NAME = os.environ["DB_NAME"]
 EMERGENT_AUTH_URL = os.environ.get("EMERGENT_AUTH_URL", "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data")
 ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "admin@careeros.app")
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "careeros2026")
+DEFAULT_DEMO_PASSWORD = os.environ.get("DEFAULT_DEMO_PASSWORD", "careeros2026")
 
 client = AsyncIOMotorClient(MONGO_URL)
 db = client[DB_NAME]
 
-app = FastAPI(title="CareerOS Campus Intelligence")
-
-# CORS — must allow credentials (cookies for auth)
+app = FastAPI(title="CareerOS")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origin_regex=r".*",
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["*"], allow_headers=["*"],
 )
 
-# ---------------- Models ----------------
-class User(BaseModel):
-    user_id: str
+# ============== MODELS ==============
+class LoginBody(BaseModel):
     email: EmailStr
-    name: str
-    picture: Optional[str] = None
-    role: Literal["super_admin", "tpo", "hod", "coordinator"] = "tpo"
-    college_id: Optional[str] = None
-    approved: bool = False
-    department: Optional[str] = None
-    created_at: str
+    password: str
 
 
-class SignupRequest(BaseModel):
+class SignupBody(BaseModel):
     college_name: str
     short_name: Optional[str] = None
     role: Literal["tpo", "hod", "coordinator"] = "tpo"
     affiliated_university: Optional[str] = None
-    departments: list[str] = []
     partnership_type: Optional[str] = None
-    phone: Optional[str] = None
     department: Optional[str] = None
 
 
-# ---------------- Auth helpers ----------------
-async def get_session_user(request: Request) -> User:
-    token = request.cookies.get("session_token")
-    if not token:
-        auth = request.headers.get("authorization", "")
-        if auth.lower().startswith("bearer "):
-            token = auth[7:]
-    if not token:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    sess = await db.user_sessions.find_one({"session_token": token}, {"_id": 0})
-    if not sess:
-        raise HTTPException(status_code=401, detail="Invalid session")
-    expires_at = sess["expires_at"]
-    if isinstance(expires_at, str):
-        expires_at = datetime.fromisoformat(expires_at)
-    if expires_at.tzinfo is None:
-        expires_at = expires_at.replace(tzinfo=timezone.utc)
-    if expires_at < datetime.now(timezone.utc):
-        raise HTTPException(status_code=401, detail="Session expired")
-    user_doc = await db.users.find_one({"user_id": sess["user_id"]}, {"_id": 0})
-    if not user_doc:
-        raise HTTPException(status_code=401, detail="User not found")
-    return User(**user_doc)
-
-
-def require_role(*roles: str):
-    async def _dep(user: User = Depends(get_session_user)) -> User:
-        if user.role not in roles:
-            raise HTTPException(status_code=403, detail=f"Requires role: {','.join(roles)}")
-        if user.role != "super_admin" and not user.approved:
-            raise HTTPException(status_code=403, detail="Account pending approval")
-        return user
-    return _dep
-
-
-# ---------------- Startup: ensure seed ----------------
-@app.on_event("startup")
-async def _startup():
-    # Bootstrap super admin
-    existing_admin = await db.users.find_one({"email": ADMIN_EMAIL}, {"_id": 0})
-    if not existing_admin:
-        await db.users.insert_one({
-            "user_id": f"user_{uuid.uuid4().hex[:12]}",
-            "email": ADMIN_EMAIL,
-            "name": "CareerOS Super Admin",
-            "picture": None,
-            "role": "super_admin",
-            "college_id": None,
-            "approved": True,
-            "department": None,
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        })
-        log.info("Seeded super admin: %s", ADMIN_EMAIL)
-
-    # Seed KMIT data if colleges collection is empty
-    n_colleges = await db.colleges.count_documents({})
-    if n_colleges == 0:
-        payload = seed_payload()
-        await db.colleges.insert_one(payload["college"])
-        await db.placement_records.insert_many(payload["placement_records"])
-        await db.year_summaries.insert_many(payload["year_summaries"])
-        await db.students.insert_many(payload["students"])
-        await db.cohorts.insert_many(payload["cohorts"])
-        await db.enrollments.insert_many(payload["enrollments"])
-        await db.mous.insert_one(payload["mou"])
-        await db.comm_log.insert_many(payload["comm_log"])
-
-        # Seed a demo TPO user linked to KMIT (approved)
-        tpo_user_id = f"user_{uuid.uuid4().hex[:12]}"
-        await db.users.insert_one({
-            "user_id": tpo_user_id,
-            "email": "tpo@kmit.in",
-            "name": "Dr. Neil Gogte",
-            "picture": None,
-            "role": "tpo",
-            "college_id": payload["college"]["college_id"],
-            "approved": True,
-            "department": None,
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        })
-        # Demo HOD + Coordinator under same college
-        await db.users.insert_many([
-            {
-                "user_id": f"user_{uuid.uuid4().hex[:12]}",
-                "email": "hod.cse@kmit.in",
-                "name": "Prof. Lavanya Iyer",
-                "picture": None,
-                "role": "hod",
-                "college_id": payload["college"]["college_id"],
-                "approved": True,
-                "department": "CSE",
-                "created_at": datetime.now(timezone.utc).isoformat(),
-            },
-            {
-                "user_id": f"user_{uuid.uuid4().hex[:12]}",
-                "email": "coord@kmit.in",
-                "name": "Ananya Reddy",
-                "picture": None,
-                "role": "coordinator",
-                "college_id": payload["college"]["college_id"],
-                "approved": True,
-                "department": None,
-                "created_at": datetime.now(timezone.utc).isoformat(),
-            },
-            # Pending signup demo
-            {
-                "user_id": f"user_{uuid.uuid4().hex[:12]}",
-                "email": "tpo@vasavi.ac.in",
-                "name": "Dr. Suresh Kumar",
-                "picture": None,
-                "role": "tpo",
-                "college_id": "col_vasavi_pending",
-                "approved": False,
-                "department": None,
-                "created_at": datetime.now(timezone.utc).isoformat(),
-            },
-        ])
-        # Pending college
-        await db.colleges.insert_one({
-            "college_id": "col_vasavi_pending",
-            "name": "Vasavi College of Engineering",
-            "short_name": "VCE",
-            "city": "Hyderabad",
-            "state": "Telangana",
-            "affiliated_university": "Osmania University",
-            "departments": ["CSE", "ECE", "IT"],
-            "partnership_types": ["CRT"],
-            "approved": False,
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        })
-        log.info("Seeded KMIT placement data + demo users")
-
-
-# ---------------- Health ----------------
-@app.get("/api/health")
-async def health():
-    return {"status": "ok", "service": "careeros-campus-intelligence"}
-
-
-# ---------------- Auth ----------------
-@app.post("/api/auth/session")
-async def auth_session(request: Request, response: Response):
-    body = await request.json()
-    session_id = body.get("session_id")
-    if not session_id:
-        raise HTTPException(status_code=400, detail="session_id required")
-
-    async with httpx.AsyncClient(timeout=15) as hx:
-        r = await hx.get(EMERGENT_AUTH_URL, headers={"X-Session-ID": session_id})
-        if r.status_code != 200:
-            raise HTTPException(status_code=401, detail="Emergent auth failed")
-        data = r.json()
-
-    email = data["email"]
-    existing = await db.users.find_one({"email": email}, {"_id": 0})
-    if existing:
-        user_id = existing["user_id"]
-        await db.users.update_one(
-            {"user_id": user_id},
-            {"$set": {"name": data.get("name", existing["name"]), "picture": data.get("picture")}},
-        )
-    else:
-        # Auto-create as TPO pending approval; admin email becomes super_admin
-        user_id = f"user_{uuid.uuid4().hex[:12]}"
-        is_admin = email == ADMIN_EMAIL
-        new_user = {
-            "user_id": user_id,
-            "email": email,
-            "name": data.get("name", email),
-            "picture": data.get("picture"),
-            "role": "super_admin" if is_admin else "tpo",
-            "college_id": None,
-            "approved": is_admin,
-            "department": None,
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        }
-        await db.users.insert_one(new_user)
-
-    session_token = data["session_token"]
+# ============== SESSION ==============
+async def _create_session(user_id: str, response: Response, token: Optional[str] = None) -> str:
+    session_token = token or f"sess_{uuid.uuid4().hex}"
     expires_at = datetime.now(timezone.utc) + timedelta(days=7)
     await db.user_sessions.insert_one({
         "session_token": session_token,
@@ -258,22 +75,159 @@ async def auth_session(request: Request, response: Response):
         "expires_at": expires_at.isoformat(),
         "created_at": datetime.now(timezone.utc).isoformat(),
     })
-
     response.set_cookie(
-        key="session_token",
-        value=session_token,
-        httponly=True,
-        secure=True,
-        samesite="none",
-        path="/",
+        key="session_token", value=session_token,
+        httponly=True, secure=True, samesite="none", path="/",
         max_age=7 * 24 * 60 * 60,
     )
-    user_doc = await db.users.find_one({"user_id": user_id}, {"_id": 0})
-    return {"user": user_doc, "session_token": session_token}
+    return session_token
+
+
+def _new_user(*, email: str, name: str, role: str, institution_id: Optional[str], password: Optional[str], approved: bool = True, department: Optional[str] = None) -> dict:
+    return {
+        "user_id": f"user_{uuid.uuid4().hex[:12]}",
+        "email": email.lower(),
+        "name": name,
+        "role": role,
+        "institution_id": institution_id,
+        "department": department,
+        "approved": approved,
+        "password_hash": hash_password(password) if password else None,
+        "picture": None,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+# ============== STARTUP — seed + demo users ==============
+@app.on_event("startup")
+async def _startup():
+    await db.users.create_index("email", unique=True)
+    n_inst = await db.institutions.count_documents({})
+    if n_inst == 0:
+        log.info("Seeding institutions, students, recruiters, DSA, aptitude…")
+        payload = seed_payload()
+        for col, items in payload.items():
+            if items:
+                await db[col].insert_many(items)
+        log.info("Seeded %d institutions, %d students, %d jobs, %d applications, %d DSA rows",
+                 len(payload["institutions"]), len(payload["students"]),
+                 len(payload["jobs"]), len(payload["applications"]), len(payload["dsa_progress"]))
+
+    # Demo users with password — idempotent
+    demo_users = [
+        {"email": ADMIN_EMAIL, "name": "Platform Super Admin", "role": "super_admin", "institution_id": None, "department": None},
+        {"email": "institution@kmit.in", "name": "KMIT — Institution Admin", "role": "institution_admin", "institution_id": "inst_kmit"},
+        {"email": "tpo@kmit.in", "name": "Dr. Neil Gogte", "role": "tpo", "institution_id": "inst_kmit"},
+        {"email": "faculty@kmit.in", "name": "Prof. Lavanya Iyer", "role": "faculty", "institution_id": "inst_kmit", "department": "CSE"},
+        {"email": "student@kmit.in", "name": "Aarav Reddy", "role": "student", "institution_id": "inst_kmit", "department": "CSE"},
+        {"email": "recruiter@amazon.com", "name": "Priya Sharma (Amazon)", "role": "recruiter", "institution_id": None, "department": None},
+        # Legacy / approval-flow demo
+        {"email": "tpo@vasavi.ac.in", "name": "Dr. Suresh Kumar", "role": "tpo", "institution_id": "inst_vasavi_pending", "approved": False},
+    ]
+    for d in demo_users:
+        existing = await db.users.find_one({"email": d["email"]})
+        if existing is None:
+            new = _new_user(
+                email=d["email"], name=d["name"], role=d["role"],
+                institution_id=d.get("institution_id"),
+                department=d.get("department"),
+                password=DEFAULT_DEMO_PASSWORD if d["role"] != "super_admin" else ADMIN_PASSWORD,
+                approved=d.get("approved", True),
+            )
+            # Bind student demo to a real seeded student row so personal dashboard works
+            if d["role"] == "student":
+                real_stu = await db.students.find_one({"institution_id": "inst_kmit", "department": "CSE"}, {"_id": 0})
+                if real_stu:
+                    new["student_id"] = real_stu["student_id"]
+            try:
+                await db.users.insert_one(new)
+            except Exception as e:
+                log.warning("Skipping user %s: %s", d["email"], e)
+        else:
+            # Refresh password if missing or admin-password-changed
+            if not existing.get("password_hash"):
+                pw = ADMIN_PASSWORD if d["role"] == "super_admin" else DEFAULT_DEMO_PASSWORD
+                await db.users.update_one({"email": d["email"]}, {"$set": {"password_hash": hash_password(pw)}})
+
+    # Pending college doc for approval flow
+    if not await db.institutions.find_one({"institution_id": "inst_vasavi_pending"}):
+        await db.institutions.insert_one({
+            "institution_id": "inst_vasavi_pending",
+            "name": "Vasavi College of Engineering",
+            "short_name": "VCE",
+            "type": "Engineering",
+            "city": "Hyderabad", "state": "Telangana",
+            "affiliated_university": "Osmania University",
+            "departments": ["CSE", "ECE", "IT"],
+            "approved": False,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+
+
+# ============== HEALTH ==============
+@app.get("/api/health")
+async def health():
+    return {"status": "ok", "service": "careeros-v2"}
+
+
+# ============== PUBLIC ==============
+@app.get("/api/public/landing-stats")
+async def landing_stats():
+    years = await db.year_summaries.find({"institution_id": "inst_kmit"}, {"_id": 0}).sort("academic_year", -1).to_list(20)
+    pipeline = [
+        {"$match": {"institution_id": "inst_kmit"}},
+        {"$group": {"_id": "$company", "selects": {"$sum": "$selects"}, "max_ctc": {"$max": "$ctc_lpa"}}},
+        {"$sort": {"selects": -1}}, {"$limit": 24},
+    ]
+    top = await db.placement_records.aggregate(pipeline).to_list(40)
+    top = [{"company": r["_id"], "selects": r["selects"], "max_ctc": r["max_ctc"]} for r in top]
+    n_students = await db.students.count_documents({})
+    n_inst = await db.institutions.count_documents({"approved": True})
+    return {"years": years, "top_recruiters": top, "totals": {"students": n_students, "institutions": n_inst}}
+
+
+# ============== AUTH ==============
+@app.post("/api/auth/login")
+async def login(body: LoginBody, response: Response):
+    email = body.email.lower()
+    user = await db.users.find_one({"email": email})
+    if not user or not user.get("password_hash") or not verify_password(body.password, user["password_hash"]):
+        raise HTTPException(401, "Invalid email or password")
+    await _create_session(user["user_id"], response)
+    user.pop("_id", None); user.pop("password_hash", None)
+    return {"user": user}
+
+
+@app.post("/api/auth/session")
+async def auth_session(request: Request, response: Response):
+    body = await request.json()
+    session_id = body.get("session_id")
+    if not session_id:
+        raise HTTPException(400, "session_id required")
+    async with httpx.AsyncClient(timeout=15) as hx:
+        r = await hx.get(EMERGENT_AUTH_URL, headers={"X-Session-ID": session_id})
+        if r.status_code != 200:
+            raise HTTPException(401, "Emergent auth failed")
+        data = r.json()
+    email = data["email"].lower()
+    existing = await db.users.find_one({"email": email})
+    if existing:
+        user_id = existing["user_id"]
+        await db.users.update_one({"user_id": user_id}, {"$set": {"name": data.get("name", existing["name"]), "picture": data.get("picture")}})
+    else:
+        is_admin = email == ADMIN_EMAIL
+        new = _new_user(email=email, name=data.get("name", email), role="super_admin" if is_admin else "tpo",
+                        institution_id=None, password=None, approved=is_admin)
+        new["picture"] = data.get("picture")
+        await db.users.insert_one(new)
+        user_id = new["user_id"]
+    await _create_session(user_id, response, token=data.get("session_token"))
+    user_doc = await db.users.find_one({"user_id": user_id}, {"_id": 0, "password_hash": 0})
+    return {"user": user_doc}
 
 
 @app.get("/api/auth/me")
-async def auth_me(user: User = Depends(get_session_user)):
+async def auth_me(user=Depends(get_session_user)):
     return user
 
 
@@ -286,130 +240,103 @@ async def auth_logout(request: Request, response: Response):
     return {"ok": True}
 
 
-@app.post("/api/auth/dev-login")
-async def dev_login(body: dict, response: Response):
-    """Test-only login: trades an email for a session token. Used by testing agent + judges' demo."""
-    email = body.get("email", "").strip().lower()
-    if not email:
-        raise HTTPException(status_code=400, detail="email required")
-    user = await db.users.find_one({"email": email}, {"_id": 0})
-    if not user:
-        raise HTTPException(status_code=404, detail="user not found")
-    session_token = f"dev_{uuid.uuid4().hex}"
-    expires_at = datetime.now(timezone.utc) + timedelta(days=7)
-    await db.user_sessions.insert_one({
-        "session_token": session_token,
-        "user_id": user["user_id"],
-        "expires_at": expires_at.isoformat(),
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    })
-    response.set_cookie(
-        key="session_token", value=session_token,
-        httponly=True, secure=True, samesite="none", path="/", max_age=7 * 24 * 60 * 60,
-    )
-    return {"user": user, "session_token": session_token}
-
-
-# ---------------- Signup (Feature 1: TPO signup + admin approval) ----------------
+# ============== SIGNUP / ONBOARDING ==============
 @app.post("/api/signup")
-async def signup(payload: SignupRequest, user: User = Depends(get_session_user)):
-    """A logged-in user (just OAuth'd) requests TPO onboarding for a college."""
-    if user.approved and user.college_id:
-        return {"status": "already-onboarded", "user_id": user.user_id}
-
+async def signup(payload: SignupBody, user=Depends(get_session_user)):
+    if user.get("approved") and user.get("institution_id"):
+        return {"status": "already-onboarded"}
     short = payload.short_name or "".join(w[0] for w in payload.college_name.split()).upper()[:6]
-    college_id = f"col_{uuid.uuid4().hex[:10]}"
-    college_doc = {
-        "college_id": college_id,
-        "name": payload.college_name,
-        "short_name": short,
-        "city": None,
-        "state": None,
+    inst_id = f"inst_{uuid.uuid4().hex[:10]}"
+    await db.institutions.insert_one({
+        "institution_id": inst_id,
+        "name": payload.college_name, "short_name": short, "type": "Engineering",
         "affiliated_university": payload.affiliated_university,
-        "departments": payload.departments or DEPARTMENTS,
-        "partnership_types": [payload.partnership_type] if payload.partnership_type else ["CRT"],
-        "approved": False,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    }
-    await db.colleges.insert_one(college_doc)
-    await db.users.update_one(
-        {"user_id": user.user_id},
-        {"$set": {
-            "role": payload.role,
-            "college_id": college_id,
-            "department": payload.department,
-            "approved": False,
-        }},
-    )
-    await notify(
-        db,
-        event="signup_requested",
-        to_email=ADMIN_EMAIL,
-        subject=f"New TPO signup awaiting approval — {payload.college_name}",
-        title="New partner signup",
-        body_html=f"<p>{user.name} ({user.email}) has requested to onboard <b>{payload.college_name}</b> as a Skill Tank partner.</p><p>Review and approve from the Admin Panel.</p>",
-        telegram_text=f"🆕 <b>TPO signup</b> · {payload.college_name} · {user.email}",
-    )
-    return {"status": "pending_approval", "college_id": college_id}
+        "departments": ["CSE", "IT", "CSE-AIML", "CSE-DS"],
+        "partnership_types": [payload.partnership_type or "CRT"],
+        "approved": False, "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    await db.users.update_one({"user_id": user["user_id"]}, {"$set": {
+        "role": payload.role, "institution_id": inst_id,
+        "department": payload.department, "approved": False,
+    }})
+    await notify(db, event="signup_requested", to_email=ADMIN_EMAIL,
+                 subject=f"New TPO signup — {payload.college_name}",
+                 title="New partner signup",
+                 body_html=f"<p>{user['name']} ({user['email']}) requested onboarding for <b>{payload.college_name}</b>.</p>",
+                 telegram_text=f"🆕 TPO signup · {payload.college_name}")
+    return {"status": "pending_approval", "institution_id": inst_id}
 
 
-# ---------------- Feature 2: College profile ----------------
-@app.get("/api/college/{college_id}")
-async def get_college(college_id: str, user: User = Depends(get_session_user)):
-    if user.role != "super_admin" and user.college_id != college_id:
-        raise HTTPException(status_code=403, detail="Cross-college access denied")
-    doc = await db.colleges.find_one({"college_id": college_id}, {"_id": 0})
-    if not doc:
-        raise HTTPException(status_code=404, detail="not found")
-    return doc
+# ============== INSTITUTIONS ==============
+@app.get("/api/institutions")
+async def list_institutions(user=Depends(get_session_user)):
+    if user["role"] == "super_admin":
+        items = await db.institutions.find({}, {"_id": 0}).to_list(500)
+    elif user.get("institution_id"):
+        items = await db.institutions.find({"institution_id": user["institution_id"]}, {"_id": 0}).to_list(10)
+    else:
+        items = []
+    return {"items": items}
 
 
-@app.patch("/api/college/{college_id}")
-async def update_college(college_id: str, body: dict, user: User = Depends(get_session_user)):
-    if user.role not in ("super_admin", "tpo") or (user.role != "super_admin" and user.college_id != college_id):
-        raise HTTPException(status_code=403, detail="forbidden")
-    allowed = {"name", "short_name", "city", "state", "affiliated_university", "departments", "partnership_types", "tpo_name", "website"}
+@app.get("/api/institutions/{institution_id}")
+async def get_institution(institution_id: str, user=Depends(get_session_user)):
+    if user["role"] != "super_admin" and user.get("institution_id") != institution_id:
+        raise HTTPException(403, "Cross-institution access denied")
+    inst = await db.institutions.find_one({"institution_id": institution_id}, {"_id": 0})
+    if not inst:
+        raise HTTPException(404, "not found")
+    return inst
+
+
+@app.patch("/api/institutions/{institution_id}")
+async def update_institution(institution_id: str, body: dict, user=Depends(require_roles("super_admin", "institution_admin", "tpo"))):
+    if user["role"] != "super_admin" and user.get("institution_id") != institution_id:
+        raise HTTPException(403, "forbidden")
+    allowed = {"name", "short_name", "city", "state", "affiliated_university", "departments", "tagline", "website"}
     update = {k: v for k, v in body.items() if k in allowed}
     if not update:
         return {"updated": 0}
-    res = await db.colleges.update_one({"college_id": college_id}, {"$set": update})
-    return {"updated": res.modified_count}
+    r = await db.institutions.update_one({"institution_id": institution_id}, {"$set": update})
+    return {"updated": r.modified_count}
 
 
-# ---------------- Feature 3: Student roster ----------------
+@app.get("/api/institutions/{institution_id}/departments")
+async def list_departments(institution_id: str, user=Depends(get_session_user)):
+    if user["role"] != "super_admin" and user.get("institution_id") != institution_id:
+        raise HTTPException(403, "forbidden")
+    items = await db.departments.find({"institution_id": institution_id}, {"_id": 0}).to_list(50)
+    return {"items": items}
+
+
+# ============== STUDENTS ==============
 @app.get("/api/students")
 async def list_students(
-    college_id: Optional[str] = None,
-    department: Optional[str] = None,
-    placed: Optional[bool] = None,
-    q: Optional[str] = None,
-    limit: int = 200,
-    user: User = Depends(get_session_user),
+    department: Optional[str] = None, placed: Optional[bool] = None,
+    q: Optional[str] = None, limit: int = 200,
+    user=Depends(get_session_user),
 ):
-    cid = college_id or user.college_id
-    if user.role != "super_admin" and cid != user.college_id:
-        raise HTTPException(status_code=403, detail="forbidden")
-    query: dict = {"college_id": cid}
+    query: dict = {}
+    if user["role"] != "super_admin":
+        if not user.get("institution_id"):
+            return {"items": [], "count": 0}
+        query["institution_id"] = user["institution_id"]
+    if user["role"] == "faculty" and user.get("department"):
+        query["department"] = user["department"]
     if department:
         query["department"] = department
     if placed is not None:
         query["placement.placed"] = placed
     if q:
-        query["$or"] = [
-            {"name": {"$regex": q, "$options": "i"}},
-            {"roll_number": {"$regex": q, "$options": "i"}},
-        ]
-    cursor = db.students.find(query, {"_id": 0}).limit(limit)
-    items = await cursor.to_list(length=limit)
+        query["$or"] = [{"name": {"$regex": q, "$options": "i"}}, {"roll_number": {"$regex": q, "$options": "i"}}]
+    items = await db.students.find(query, {"_id": 0}).limit(limit).to_list(limit)
     return {"items": items, "count": len(items)}
 
 
 @app.post("/api/students")
-async def add_student(body: dict, user: User = Depends(get_session_user)):
-    if user.role not in ("super_admin", "tpo", "hod", "coordinator"):
-        raise HTTPException(status_code=403, detail="forbidden")
+async def add_student(body: dict, user=Depends(require_roles("super_admin", "tpo", "institution_admin", "faculty"))):
     body["student_id"] = body.get("student_id") or f"stu_{uuid.uuid4().hex[:10]}"
-    body["college_id"] = user.college_id if user.role != "super_admin" else body.get("college_id")
+    body["institution_id"] = user.get("institution_id") if user["role"] != "super_admin" else body.get("institution_id")
     body.setdefault("placement", {"placed": False})
     body.setdefault("created_at", datetime.now(timezone.utc).isoformat())
     await db.students.insert_one(body)
@@ -417,240 +344,433 @@ async def add_student(body: dict, user: User = Depends(get_session_user)):
 
 
 @app.get("/api/students/{student_id}")
-async def get_student(student_id: str, user: User = Depends(get_session_user)):
+async def get_student(student_id: str, user=Depends(get_session_user)):
     s = await db.students.find_one({"student_id": student_id}, {"_id": 0})
     if not s:
         raise HTTPException(404, "not found")
-    if user.role != "super_admin" and s["college_id"] != user.college_id:
+    if user["role"] not in ("super_admin",) and s["institution_id"] != user.get("institution_id"):
         raise HTTPException(403, "forbidden")
     enrolls = await db.enrollments.find({"student_id": student_id}, {"_id": 0}).to_list(20)
-    return {"student": s, "enrollments": enrolls}
+    apps = await db.applications.find({"student_id": student_id}, {"_id": 0}).to_list(20)
+    return {"student": s, "enrollments": enrolls, "applications": apps}
 
 
-# ---------------- Feature 4: Program / cohort tracking ----------------
-@app.get("/api/cohorts")
-async def list_cohorts(user: User = Depends(get_session_user)):
-    cid = user.college_id
-    if user.role == "super_admin":
-        cohorts = await db.cohorts.find({}, {"_id": 0}).to_list(200)
-    else:
-        cohorts = await db.cohorts.find({"college_id": cid}, {"_id": 0}).to_list(200)
-    return {"items": cohorts, "programs": PROGRAMS}
-
-
-# ---------------- Feature 5: Placement outcomes dashboard ----------------
-@app.get("/api/placements/overview")
-async def placements_overview(user: User = Depends(get_session_user)):
-    cid = user.college_id or "col_kmit_main"
-    if user.role == "super_admin":
-        cid = "col_kmit_main"
-    years = await db.year_summaries.find({"college_id": cid}, {"_id": 0}).sort("academic_year", -1).to_list(20)
-    records = await db.placement_records.find({"college_id": cid}, {"_id": 0}).to_list(500)
-    students_placed = await db.students.count_documents({"college_id": cid, "placement.placed": True})
-    students_total = await db.students.count_documents({"college_id": cid})
-
-    # Top recruiters all-time
-    pipeline = [
-        {"$match": {"college_id": cid}},
-        {"$group": {"_id": "$company", "selects": {"$sum": "$selects"}, "max_ctc": {"$max": "$ctc_lpa"}}},
-        {"$sort": {"selects": -1}},
-        {"$limit": 12},
-    ]
-    top_recruiters = await db.placement_records.aggregate(pipeline).to_list(20)
-    top_recruiters = [{"company": r["_id"], "selects": r["selects"], "max_ctc": r["max_ctc"]} for r in top_recruiters]
-
-    # By department breakdown for current year
-    dept_breakdown = []
-    for d in DEPARTMENTS:
-        placed = await db.students.count_documents({"college_id": cid, "department": d, "placement.placed": True})
-        total = await db.students.count_documents({"college_id": cid, "department": d})
-        dept_breakdown.append({"department": d, "placed": placed, "total": total})
-
+# ============== STUDENT PERSONAL (logged-in student) ==============
+@app.get("/api/me/dashboard")
+async def my_dashboard(user=Depends(require_roles("student"))):
+    sid = user.get("student_id")
+    if not sid:
+        s = await db.students.find_one({"institution_id": user.get("institution_id")}, {"_id": 0})
+        if s:
+            sid = s["student_id"]
+            await db.users.update_one({"user_id": user["user_id"]}, {"$set": {"student_id": sid}})
+    s = await db.students.find_one({"student_id": sid}, {"_id": 0}) if sid else None
+    if not s:
+        raise HTTPException(404, "no student record bound")
+    dsa = await db.dsa_progress.find({"student_id": sid}, {"_id": 0}).to_list(50)
+    apt = await db.aptitude_scores.find({"student_id": sid}, {"_id": 0}).to_list(20)
+    ats = await db.ats_reports.find({"student_id": sid}, {"_id": 0}).sort("created_at", -1).limit(1).to_list(1)
+    interviews = await db.interview_reports.find({"student_id": sid}, {"_id": 0}).sort("conducted_at", -1).limit(10).to_list(10)
+    apps = await db.applications.find({"student_id": sid}, {"_id": 0}).sort("applied_at", -1).limit(20).to_list(20)
+    # Recommendations: open jobs for this student's institution + stream
+    inst_id = s["institution_id"]
+    recs = await db.jobs.find({"institutions": inst_id, "status": "open"}, {"_id": 0}).limit(6).to_list(6)
     return {
-        "year_summaries": years,
-        "records": records,
-        "top_recruiters": top_recruiters,
-        "department_breakdown": dept_breakdown,
-        "students_placed": students_placed,
-        "students_total": students_total,
+        "student": s, "dsa": dsa, "aptitude": apt,
+        "ats": ats[0] if ats else None, "interviews": interviews,
+        "applications": apps, "recommended_jobs": recs,
+        "topics": STRIVER_TOPICS, "aptitude_sections": APTITUDE_SECTIONS,
+        "dsa_total": DSA_TOTAL,
     }
 
 
-# ---------------- Feature 6: Training completion ----------------
-@app.get("/api/training/completion")
-async def training_completion(user: User = Depends(get_session_user)):
-    cid = user.college_id or "col_kmit_main"
-    if user.role == "super_admin":
-        cid = "col_kmit_main"
-    pipeline = [
-        {"$match": {"college_id": cid}},
-        {"$group": {
-            "_id": "$program_code",
-            "avg_completion": {"$avg": "$completion_pct"},
-            "completed": {"$sum": {"$cond": [{"$eq": ["$status", "completed"]}, 1, 0]}},
-            "in_progress": {"$sum": {"$cond": [{"$eq": ["$status", "in_progress"]}, 1, 0]}},
-            "enrolled": {"$sum": 1},
-        }},
-    ]
-    by_program = await db.enrollments.aggregate(pipeline).to_list(20)
-    # Join with program metadata
-    prog_map = {p["code"]: p for p in PROGRAMS}
-    for row in by_program:
-        meta = prog_map.get(row["_id"], {})
-        row["program_code"] = row["_id"]
-        row["program_name"] = meta.get("name", row["_id"])
-        row["modules"] = meta.get("modules")
-        row["avg_completion"] = round(row["avg_completion"] or 0, 1)
+# ============== DSA INTELLIGENCE ==============
+@app.get("/api/dsa/topics")
+async def dsa_topics():
+    return {"topics": STRIVER_TOPICS, "total": DSA_TOTAL}
 
-    # Student-level (top 50 by completion)
-    enroll_rows = await db.enrollments.find({"college_id": cid}, {"_id": 0}).sort("completion_pct", -1).limit(80).to_list(80)
-    student_ids = list({e["student_id"] for e in enroll_rows})
-    students = await db.students.find({"student_id": {"$in": student_ids}}, {"_id": 0}).to_list(200)
-    s_map = {s["student_id"]: s for s in students}
+
+@app.get("/api/dsa/intelligence")
+async def dsa_intelligence(user=Depends(get_session_user)):
+    iid = user.get("institution_id")
+    if not iid:
+        return {"by_topic": [], "leaderboard": []}
+    pipeline = [
+        {"$match": {"institution_id": iid}},
+        {"$group": {"_id": "$topic_code", "topic_name": {"$first": "$topic_name"},
+                    "total": {"$first": "$total"}, "solved": {"$sum": "$solved"},
+                    "students": {"$sum": 1}}},
+        {"$sort": {"_id": 1}},
+    ]
+    by_topic = await db.dsa_progress.aggregate(pipeline).to_list(30)
+    leaderboard_pipe = [
+        {"$match": {"institution_id": iid}},
+        {"$group": {"_id": "$student_id", "solved": {"$sum": "$solved"}}},
+        {"$sort": {"solved": -1}},
+        {"$limit": 20},
+    ]
+    lb = await db.dsa_progress.aggregate(leaderboard_pipe).to_list(30)
+    sids = [r["_id"] for r in lb]
+    students = await db.students.find({"student_id": {"$in": sids}}, {"_id": 0}).to_list(30)
+    smap = {s["student_id"]: s for s in students}
+    leaderboard = []
+    for r in lb:
+        s = smap.get(r["_id"], {})
+        leaderboard.append({
+            "student_id": r["_id"], "name": s.get("name", "—"),
+            "roll_number": s.get("roll_number", "—"), "department": s.get("department", "—"),
+            "solved": r["solved"], "readiness": min(100, round(r["solved"] / DSA_TOTAL * 100, 1)),
+        })
+    return {"by_topic": by_topic, "leaderboard": leaderboard, "total_problems": DSA_TOTAL}
+
+
+@app.post("/api/me/dsa/toggle")
+async def dsa_toggle(body: dict, user=Depends(require_roles("student"))):
+    """Increment/decrement solved count for a topic for the logged-in student."""
+    sid = user.get("student_id")
+    topic = body.get("topic_code")
+    delta = int(body.get("delta", 1))
+    if not (sid and topic):
+        raise HTTPException(400, "topic_code required")
+    row = await db.dsa_progress.find_one({"student_id": sid, "topic_code": topic})
+    if not row:
+        raise HTTPException(404, "topic not found")
+    new_solved = max(0, min(row["total"], row["solved"] + delta))
+    await db.dsa_progress.update_one({"progress_id": row["progress_id"]},
+                                     {"$set": {"solved": new_solved, "last_solved_at": datetime.now(timezone.utc).isoformat()}})
+    return {"solved": new_solved, "total": row["total"]}
+
+
+# ============== APTITUDE INTELLIGENCE ==============
+@app.get("/api/aptitude/intelligence")
+async def aptitude_intelligence(user=Depends(get_session_user)):
+    iid = user.get("institution_id")
+    if not iid:
+        return {"by_section": []}
+    pipeline = [
+        {"$match": {"institution_id": iid}},
+        {"$group": {"_id": "$section_code", "section_name": {"$first": "$section_name"},
+                    "avg_score": {"$avg": "$score_pct"},
+                    "avg_accuracy": {"$avg": "$accuracy_pct"},
+                    "tests": {"$sum": "$tests_taken"},
+                    "students": {"$sum": 1}}},
+        {"$sort": {"_id": 1}},
+    ]
+    sections = await db.aptitude_scores.aggregate(pipeline).to_list(20)
+    for s in sections:
+        s["avg_score"] = round(s["avg_score"] or 0, 1)
+        s["avg_accuracy"] = round(s["avg_accuracy"] or 0, 1)
+    return {"by_section": sections, "sections": APTITUDE_SECTIONS}
+
+
+# ============== RESUME ATS ==============
+@app.get("/api/ats/intelligence")
+async def ats_intelligence(user=Depends(get_session_user)):
+    iid = user.get("institution_id")
+    if not iid:
+        return {"avg_score": 0, "rows": []}
+    pipeline = [{"$match": {"institution_id": iid}},
+                {"$group": {"_id": None, "avg": {"$avg": "$score"}, "count": {"$sum": 1}}}]
+    agg = await db.ats_reports.aggregate(pipeline).to_list(1)
+    rows = await db.ats_reports.find({"institution_id": iid}, {"_id": 0}).sort("created_at", -1).limit(40).to_list(40)
+    sids = list({r["student_id"] for r in rows})
+    students = await db.students.find({"student_id": {"$in": sids}}, {"_id": 0}).to_list(80)
+    smap = {s["student_id"]: s for s in students}
+    for r in rows:
+        s = smap.get(r["student_id"], {})
+        r["student_name"] = s.get("name", "—")
+        r["roll_number"] = s.get("roll_number", "—")
+        r["department"] = s.get("department", "—")
+    return {"avg_score": round(agg[0]["avg"], 1) if agg else 0, "count": agg[0]["count"] if agg else 0, "rows": rows}
+
+
+# ============== INTERVIEW REPORTS ==============
+@app.get("/api/interviews/intelligence")
+async def interviews_intelligence(user=Depends(get_session_user)):
+    iid = user.get("institution_id")
+    if not iid:
+        return {"rows": []}
+    rows = await db.interview_reports.find({"institution_id": iid}, {"_id": 0}).sort("conducted_at", -1).limit(60).to_list(60)
+    sids = list({r["student_id"] for r in rows})
+    students = await db.students.find({"student_id": {"$in": sids}}, {"_id": 0}).to_list(120)
+    smap = {s["student_id"]: s for s in students}
+    for r in rows:
+        s = smap.get(r["student_id"], {})
+        r["student_name"] = s.get("name", "—")
+        r["roll_number"] = s.get("roll_number", "—")
+    avg_conf = round(sum(r["confidence_score"] for r in rows) / max(1, len(rows)), 1)
+    avg_tech = round(sum(r["technical_score"] for r in rows) / max(1, len(rows)), 1)
+    return {"rows": rows, "avg_confidence": avg_conf, "avg_technical": avg_tech}
+
+
+# ============== PLACEMENT INTELLIGENCE ==============
+@app.get("/api/placements/overview")
+async def placements_overview(user=Depends(get_session_user)):
+    iid = user.get("institution_id") or "inst_kmit"
+    if user["role"] == "super_admin":
+        iid = "inst_kmit"
+    years = await db.year_summaries.find({"institution_id": iid}, {"_id": 0}).sort("academic_year", -1).to_list(20)
+    records = await db.placement_records.find({"institution_id": iid}, {"_id": 0}).to_list(500)
+    placed = await db.students.count_documents({"institution_id": iid, "placement.placed": True})
+    total = await db.students.count_documents({"institution_id": iid})
+    pipeline = [{"$match": {"institution_id": iid}},
+                {"$group": {"_id": "$company", "selects": {"$sum": "$selects"}, "max_ctc": {"$max": "$ctc_lpa"}}},
+                {"$sort": {"selects": -1}}, {"$limit": 12}]
+    top = await db.placement_records.aggregate(pipeline).to_list(20)
+    top = [{"company": r["_id"], "selects": r["selects"], "max_ctc": r["max_ctc"]} for r in top]
+    inst = await db.institutions.find_one({"institution_id": iid}, {"_id": 0})
+    dept_breakdown = []
+    for d in (inst["departments"] if inst else []):
+        p = await db.students.count_documents({"institution_id": iid, "department": d, "placement.placed": True})
+        t = await db.students.count_documents({"institution_id": iid, "department": d})
+        dept_breakdown.append({"department": d, "placed": p, "total": t})
+    return {
+        "year_summaries": years, "records": records, "top_recruiters": top,
+        "department_breakdown": dept_breakdown,
+        "students_placed": placed, "students_total": total,
+    }
+
+
+# ============== TRAINING ==============
+@app.get("/api/cohorts")
+async def list_cohorts(user=Depends(get_session_user)):
+    iid = user.get("institution_id")
+    query = {} if user["role"] == "super_admin" else {"institution_id": iid}
+    items = await db.training_programs.find(query, {"_id": 0}).to_list(200)
+    return {"items": items, "programs": PROGRAMS}
+
+
+@app.get("/api/training/completion")
+async def training_completion(user=Depends(get_session_user)):
+    iid = user.get("institution_id") or "inst_kmit"
+    pipeline = [{"$match": {"institution_id": iid}},
+                {"$group": {"_id": "$program_code",
+                            "avg_completion": {"$avg": "$completion_pct"},
+                            "completed": {"$sum": {"$cond": [{"$eq": ["$status", "completed"]}, 1, 0]}},
+                            "in_progress": {"$sum": {"$cond": [{"$eq": ["$status", "in_progress"]}, 1, 0]}},
+                            "enrolled": {"$sum": 1}}}]
+    by_program = await db.enrollments.aggregate(pipeline).to_list(20)
+    prog_map = {p["code"]: p for p in PROGRAMS}
+    for r in by_program:
+        meta = prog_map.get(r["_id"], {})
+        r["program_code"] = r["_id"]; r["program_name"] = meta.get("name", r["_id"])
+        r["modules"] = meta.get("modules"); r["avg_completion"] = round(r["avg_completion"] or 0, 1)
+    enroll_rows = await db.enrollments.find({"institution_id": iid}, {"_id": 0}).sort("completion_pct", -1).limit(80).to_list(80)
+    sids = list({e["student_id"] for e in enroll_rows})
+    students = await db.students.find({"student_id": {"$in": sids}}, {"_id": 0}).to_list(200)
+    smap = {s["student_id"]: s for s in students}
     for e in enroll_rows:
-        s = s_map.get(e["student_id"], {})
+        s = smap.get(e["student_id"], {})
         e["student_name"] = s.get("name", "—")
         e["roll_number"] = s.get("roll_number", "—")
         e["department"] = s.get("department", "—")
     return {"by_program": by_program, "rows": enroll_rows}
 
 
-# ---------------- Feature 7: MOU management ----------------
+# ============== APPLICATIONS / JOBS ==============
+@app.get("/api/jobs")
+async def list_jobs(status: Optional[str] = "open", user=Depends(get_session_user)):
+    query = {}
+    if status and status != "all":
+        query["status"] = status
+    if user["role"] == "recruiter":
+        query["recruiter_id"] = {"$exists": True}  # all recruiter jobs visible to recruiter; future: scope to recruiter_id
+    items = await db.jobs.find(query, {"_id": 0}).sort("drive_date", -1).limit(80).to_list(80)
+    return {"items": items}
+
+
+@app.post("/api/jobs")
+async def create_job(body: dict, user=Depends(require_roles("recruiter", "super_admin", "tpo", "institution_admin"))):
+    body["job_id"] = f"job_{uuid.uuid4().hex[:10]}"
+    body.setdefault("status", "open")
+    body.setdefault("applied_count", 0)
+    body.setdefault("created_at", datetime.now(timezone.utc).isoformat())
+    await db.jobs.insert_one(body)
+    return {"job_id": body["job_id"]}
+
+
+@app.get("/api/applications")
+async def list_applications(stage: Optional[str] = None, company: Optional[str] = None, user=Depends(get_session_user)):
+    query = {}
+    if user["role"] not in ("super_admin", "recruiter"):
+        if user.get("institution_id"):
+            query["institution_id"] = user["institution_id"]
+    if user["role"] == "faculty" and user.get("department"):
+        query["department"] = user["department"]
+    if stage:
+        query["stage"] = stage
+    if company:
+        query["company"] = company
+    items = await db.applications.find(query, {"_id": 0}).sort("applied_at", -1).limit(200).to_list(200)
+    # Pipeline counts (same filter without stage)
+    pipe_query = {k: v for k, v in query.items() if k != "stage"}
+    pipeline = [{"$match": pipe_query},
+                {"$group": {"_id": "$stage", "n": {"$sum": 1}}}]
+    counts = await db.applications.aggregate(pipeline).to_list(20)
+    return {"items": items, "pipeline": {c["_id"]: c["n"] for c in counts}}
+
+
+@app.patch("/api/applications/{application_id}")
+async def update_application(application_id: str, body: dict, user=Depends(require_roles("super_admin", "tpo", "recruiter", "institution_admin"))):
+    allowed = {"stage", "next_step_at"}
+    update = {k: v for k, v in body.items() if k in allowed}
+    if not update:
+        return {"updated": 0}
+    r = await db.applications.update_one({"application_id": application_id}, {"$set": update})
+    return {"updated": r.modified_count}
+
+
+# ============== RECRUITER INTELLIGENCE ==============
+@app.get("/api/recruiters")
+async def list_recruiters(user=Depends(get_session_user)):
+    items = await db.recruiters.find({}, {"_id": 0}).sort("hires_total", -1).limit(60).to_list(60)
+    return {"items": items}
+
+
+@app.get("/api/recruiters/{recruiter_id}/talent-pool")
+async def talent_pool(recruiter_id: str, min_cgpa: float = 6.5, user=Depends(require_roles("recruiter", "super_admin"))):
+    # All students above cgpa, ordered by readiness
+    students = await db.students.find({"cgpa": {"$gte": min_cgpa}}, {"_id": 0}).sort("readiness_score", -1).limit(60).to_list(60)
+    return {"items": students, "count": len(students)}
+
+
+# ============== ANNOUNCEMENTS ==============
+@app.get("/api/announcements")
+async def list_announcements(user=Depends(get_session_user)):
+    iid = user.get("institution_id") or "inst_kmit"
+    items = await db.announcements.find({"institution_id": iid}, {"_id": 0}).sort("created_at", -1).limit(20).to_list(20)
+    return {"items": items}
+
+
+@app.post("/api/announcements")
+async def create_announcement(body: dict, user=Depends(require_roles("tpo", "institution_admin", "faculty", "super_admin"))):
+    body["announcement_id"] = f"ann_{uuid.uuid4().hex[:10]}"
+    body["institution_id"] = user.get("institution_id") or "inst_kmit"
+    body["by_role"] = user["role"]
+    body["created_at"] = datetime.now(timezone.utc).isoformat()
+    await db.announcements.insert_one(body)
+    await notify(db, event="announcement_posted",
+                 to_email=ADMIN_EMAIL, subject=f"Announcement: {body.get('title')}",
+                 title=body.get("title", "Announcement"),
+                 body_html=f"<p>{body.get('body', '')}</p>",
+                 telegram_text=f"📣 {body.get('title')}")
+    return {"announcement_id": body["announcement_id"]}
+
+
+# ============== MOU ==============
 @app.get("/api/mou")
-async def get_mou(user: User = Depends(get_session_user)):
-    cid = user.college_id or "col_kmit_main"
-    if user.role == "super_admin":
-        cid = "col_kmit_main"
-    mou = await db.mous.find_one({"college_id": cid}, {"_id": 0})
+async def get_mou(user=Depends(get_session_user)):
+    iid = user.get("institution_id") or "inst_kmit"
+    if user["role"] == "super_admin":
+        iid = "inst_kmit"
+    mou = await db.mous.find_one({"institution_id": iid}, {"_id": 0})
     if not mou:
-        raise HTTPException(404, "no MOU on file")
-    # Compute days until renewal
+        raise HTTPException(404, "no MOU")
     exp = datetime.fromisoformat(mou["expires_on"])
     if exp.tzinfo is None:
         exp = exp.replace(tzinfo=timezone.utc)
-    days_left = (exp - datetime.now(timezone.utc)).days
-    mou["days_until_renewal"] = days_left
+    mou["days_until_renewal"] = (exp - datetime.now(timezone.utc)).days
     return mou
 
 
 @app.post("/api/mou/upload")
-async def upload_mou(
-    file: UploadFile = File(...),
-    expires_on: str = Form(...),
-    partnership_type: str = Form("CRT"),
-    user: User = Depends(get_session_user),
-):
-    if user.role not in ("super_admin", "tpo"):
-        raise HTTPException(403, "forbidden")
-    cid = user.college_id
+async def upload_mou(file: UploadFile = File(...), expires_on: str = Form(...), partnership_type: str = Form("CRT"),
+                    user=Depends(require_roles("super_admin", "tpo", "institution_admin"))):
+    iid = user.get("institution_id") or "inst_kmit"
     content = await file.read()
     size_kb = round(len(content) / 1024, 1)
-
-    update = {
-        "college_id": cid,
-        "document_name": file.filename,
-        "document_size_kb": size_kb,
-        "partnership_type": partnership_type,
-        "expires_on": expires_on,
-        "signed_on": datetime.now(timezone.utc).isoformat(),
+    await db.mous.update_one({"institution_id": iid}, {"$set": {
+        "institution_id": iid, "document_name": file.filename,
+        "document_size_kb": size_kb, "partnership_type": partnership_type,
+        "expires_on": expires_on, "signed_on": datetime.now(timezone.utc).isoformat(),
         "status": "active",
-    }
-    await db.mous.update_one({"college_id": cid}, {"$set": update}, upsert=True)
-    await notify(
-        db,
-        event="mou_uploaded",
-        to_email=ADMIN_EMAIL,
-        subject=f"MOU uploaded — {cid}",
-        title="MOU document received",
-        body_html=f"<p>New MOU file <b>{file.filename}</b> ({size_kb} KB) uploaded.</p>",
-        telegram_text=f"📄 MOU uploaded · {cid} · {file.filename}",
-    )
+    }}, upsert=True)
+    await notify(db, event="mou_uploaded", to_email=ADMIN_EMAIL,
+                 subject=f"MOU uploaded — {iid}", title="MOU received",
+                 body_html=f"<p>{file.filename} ({size_kb} KB) uploaded.</p>",
+                 telegram_text=f"📄 MOU · {iid}")
     return {"ok": True, "document_name": file.filename, "size_kb": size_kb}
 
 
-# ---------------- Central admin panel ----------------
+# ============== ADMIN PANEL ==============
 @app.get("/api/admin/pending-signups")
-async def pending_signups(user: User = Depends(require_role("super_admin"))):
-    pending = await db.users.find({"approved": False}, {"_id": 0}).to_list(200)
-    # Hydrate with college info
-    college_ids = list({u["college_id"] for u in pending if u.get("college_id")})
-    colleges = await db.colleges.find({"college_id": {"$in": college_ids}}, {"_id": 0}).to_list(200)
-    c_map = {c["college_id"]: c for c in colleges}
+async def pending_signups(admin=Depends(require_roles("super_admin"))):
+    pending = await db.users.find({"approved": False}, {"_id": 0, "password_hash": 0}).to_list(200)
+    ids = list({u["institution_id"] for u in pending if u.get("institution_id")})
+    insts = await db.institutions.find({"institution_id": {"$in": ids}}, {"_id": 0}).to_list(200)
+    imap = {i["institution_id"]: i for i in insts}
     for u in pending:
-        u["college"] = c_map.get(u.get("college_id"))
-    return {"items": pending, "count": len(pending)}
+        u["institution"] = imap.get(u.get("institution_id"))
+    return {"items": pending}
 
 
 @app.post("/api/admin/approve/{user_id}")
-async def approve_user(user_id: str, admin: User = Depends(require_role("super_admin"))):
-    target = await db.users.find_one({"user_id": user_id}, {"_id": 0})
-    if not target:
+async def approve_user(user_id: str, admin=Depends(require_roles("super_admin"))):
+    t = await db.users.find_one({"user_id": user_id})
+    if not t:
         raise HTTPException(404, "not found")
     await db.users.update_one({"user_id": user_id}, {"$set": {"approved": True}})
-    if target.get("college_id"):
-        await db.colleges.update_one(
-            {"college_id": target["college_id"]},
-            {"$set": {"approved": True, "approved_at": datetime.now(timezone.utc).isoformat()}},
-        )
-    await notify(
-        db,
-        event="account_approved",
-        to_email=target["email"],
-        subject="Your CareerOS access is live",
-        title="Welcome aboard",
-        body_html=f"<p>Hi {target['name']},</p><p>Your CareerOS Campus Intelligence access is now active. Sign in to view your placement command center.</p>",
-        telegram_text=f"✅ Approved · {target['email']}",
-    )
+    if t.get("institution_id"):
+        await db.institutions.update_one({"institution_id": t["institution_id"]},
+                                         {"$set": {"approved": True, "approved_at": datetime.now(timezone.utc).isoformat()}})
+    await notify(db, event="account_approved", to_email=t["email"],
+                 subject="Your CareerOS access is live",
+                 title="Welcome aboard",
+                 body_html=f"<p>Hi {t['name']}, your CareerOS access is now active.</p>",
+                 telegram_text=f"✅ Approved · {t['email']}")
     return {"ok": True}
 
 
 @app.post("/api/admin/reject/{user_id}")
-async def reject_user(user_id: str, admin: User = Depends(require_role("super_admin"))):
-    target = await db.users.find_one({"user_id": user_id}, {"_id": 0})
-    if not target:
+async def reject_user(user_id: str, admin=Depends(require_roles("super_admin"))):
+    t = await db.users.find_one({"user_id": user_id})
+    if not t:
         raise HTTPException(404, "not found")
     await db.users.delete_one({"user_id": user_id})
-    if target.get("college_id"):
-        await db.colleges.delete_one({"college_id": target["college_id"], "approved": False})
+    if t.get("institution_id"):
+        await db.institutions.delete_one({"institution_id": t["institution_id"], "approved": False})
     return {"ok": True}
 
 
-@app.get("/api/admin/colleges")
-async def admin_colleges(admin: User = Depends(require_role("super_admin"))):
-    items = await db.colleges.find({}, {"_id": 0}).to_list(500)
-    return {"items": items, "count": len(items)}
-
-
 @app.get("/api/admin/notifications")
-async def admin_notifications(admin: User = Depends(require_role("super_admin"))):
+async def admin_notifications(admin=Depends(require_roles("super_admin"))):
     items = await db.notification_log.find({}, {"_id": 0}).sort("created_at", -1).limit(100).to_list(100)
     return {"items": items}
 
 
-# ---------------- Public landing stats (no auth) ----------------
-@app.get("/api/public/landing-stats")
-async def landing_stats():
-    years = await db.year_summaries.find({}, {"_id": 0}).sort("academic_year", -1).to_list(20)
-    pipeline = [
-        {"$group": {"_id": "$company", "selects": {"$sum": "$selects"}, "max_ctc": {"$max": "$ctc_lpa"}}},
-        {"$sort": {"selects": -1}},
-        {"$limit": 20},
-    ]
-    top = await db.placement_records.aggregate(pipeline).to_list(30)
-    top = [{"company": r["_id"], "selects": r["selects"], "max_ctc": r["max_ctc"]} for r in top]
-    return {"years": years, "top_recruiters": top}
-
-
-# ---------------- Trigger demo notification ----------------
 @app.post("/api/admin/test-notification")
-async def test_notification(admin: User = Depends(require_role("super_admin"))):
-    await notify(
-        db,
-        event="admin_test",
-        to_email=ADMIN_EMAIL,
-        subject="CareerOS · Test notification",
-        title="Heartbeat",
-        body_html="<p>This is a test notification fan-out from the admin panel.</p>",
-        telegram_text="🔔 CareerOS admin test notification",
-    )
+async def test_notification(admin=Depends(require_roles("super_admin"))):
+    await notify(db, event="admin_test", to_email=ADMIN_EMAIL,
+                 subject="CareerOS · Test notification",
+                 title="Heartbeat",
+                 body_html="<p>Test fan-out triggered.</p>",
+                 telegram_text="🔔 CareerOS test")
     return {"ok": True}
+
+
+@app.get("/api/admin/platform-stats")
+async def platform_stats(admin=Depends(require_roles("super_admin"))):
+    n_inst = await db.institutions.count_documents({"approved": True})
+    n_pending = await db.users.count_documents({"approved": False})
+    n_students = await db.students.count_documents({})
+    n_apps = await db.applications.count_documents({})
+    n_jobs_open = await db.jobs.count_documents({"status": "open"})
+    n_recruiters = await db.recruiters.count_documents({})
+    # MRR-style proxy: 18% rev share × placed offer count × avg LPA × ₹/lpa-share
+    placed = await db.students.count_documents({"placement.placed": True})
+    estimated_mrr = round(placed * 0.18 * 6 * 1000 / 12, 0)  # rough proxy
+    by_type_pipeline = [{"$group": {"_id": "$type", "n": {"$sum": 1}}}]
+    by_type = await db.institutions.aggregate(by_type_pipeline).to_list(20)
+    return {
+        "institutions": n_inst, "pending_signups": n_pending,
+        "students": n_students, "applications": n_apps,
+        "jobs_open": n_jobs_open, "recruiters": n_recruiters,
+        "estimated_mrr_inr": estimated_mrr,
+        "by_type": [{"type": b["_id"], "count": b["n"]} for b in by_type],
+    }
+
+
+@app.get("/api/admin/colleges")
+async def admin_colleges(admin=Depends(require_roles("super_admin"))):
+    items = await db.institutions.find({}, {"_id": 0}).to_list(500)
+    return {"items": items}

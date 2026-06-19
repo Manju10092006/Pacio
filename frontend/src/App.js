@@ -17,7 +17,6 @@ import { roleConfig } from "./layouts/roleConfig";
 import Overview from "./pages/Overview";
 import Roster from "./pages/StudentRoster";
 import Cohorts from "./pages/Cohorts";
-import Outcomes from "./pages/Outcomes";
 import Training from "./pages/Training";
 import MOU from "./pages/MOU";
 import CollegeProfile from "./pages/CollegeProfile";

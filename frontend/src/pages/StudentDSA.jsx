@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../lib/api";
-import { CheckCircle2, Circle, Plus, Minus } from "lucide-react";
+import Editor from "@monaco-editor/react";
+import { CheckCircle2, Circle, Plus, Minus, Play, Send } from "lucide-react";
 import { Button, Input, Textarea, Select, Badge, Progress, SheetRoot, SheetContent } from "../components/Primitives";
 import { PageTransition, DashboardReveal, CounterAnimation } from "../components/Motion";
 
@@ -18,6 +19,11 @@ export default function StudentDSA() {
   const [formApproach, setFormApproach] = useState("");
   const [formNotes, setFormNotes] = useState("");
   const [submittingAttempt, setSubmittingAttempt] = useState(false);
+  const [codeLanguage, setCodeLanguage] = useState("python");
+  const [code, setCode] = useState("def solve():\n    pass\n\nsolve()\n");
+  const [customInput, setCustomInput] = useState("");
+  const [execution, setExecution] = useState(null);
+  const [runningCode, setRunningCode] = useState(false);
 
   const load = async () => {
     const [{ data: dashboard }, { data: questionProgress }] = await Promise.all([
@@ -98,6 +104,27 @@ export default function StudentDSA() {
     }
   };
 
+  const runCode = async (kind = "run") => {
+    if (!selectedQuestion) return;
+    setRunningCode(true);
+    try {
+      const endpoint = kind === "submit" ? "/me/dsa/submissions/submit" : "/me/dsa/submissions/run";
+      const { data } = await api.post(endpoint, {
+        question_id: selectedQuestion.question_id,
+        language: codeLanguage,
+        code,
+        custom_input: customInput,
+      });
+      setExecution(data);
+      await load();
+      await loadQuestionDetails(selectedQuestion.question_id);
+    } catch (err) {
+      setExecution({ result: { status: "Error", errors: err?.response?.data?.detail || "Execution failed" } });
+    } finally {
+      setRunningCode(false);
+    }
+  };
+
   if (!d) return <div className="font-mono text-xs text-ink-400 p-8">LOADING…</div>;
   const solved = d.dsa.reduce((a, t) => a + t.solved, 0);
   const pct = Math.round((solved / d.dsa_total) * 100);
@@ -172,6 +199,7 @@ export default function StudentDSA() {
                       onClick={() => {
                         setSelectedQuestion(question);
                         setFormStatus(question.solved ? "solved" : "attempted");
+                        setExecution(null);
                         loadQuestionDetails(question.question_id);
                       }}
                       className="w-full grid grid-cols-[20px_1fr_auto] gap-2 items-center text-left px-2.5 py-2 border border-transparent hover:border-line-strong hover:bg-bone-100/50 transition-all font-sans"
@@ -201,6 +229,60 @@ export default function StudentDSA() {
                   <Badge variant="success">SOLVED</Badge>
                 ) : (
                   <Badge variant="warning">UNSOLVED</Badge>
+                )}
+              </div>
+
+              <div className="border border-line-strong bg-bone-100/80 p-5 space-y-4" data-testid="dsa-coding-workspace">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="font-mono text-[10px] tracking-[0.24em] text-ink-400">CODING WORKSPACE</div>
+                    <div className="text-xs text-ink-500 mt-1">Run against custom input, then submit to update readiness.</div>
+                  </div>
+                  <Select value={codeLanguage} onChange={(e) => setCodeLanguage(e.target.value)} className="w-36 py-2 text-xs">
+                    <option value="python">Python</option>
+                    <option value="javascript">JavaScript</option>
+                    <option value="java">Java</option>
+                    <option value="cpp">C++</option>
+                  </Select>
+                </div>
+                <div className="border border-line bg-ink overflow-hidden">
+                  <Editor
+                    height="320px"
+                    language={codeLanguage === "cpp" ? "cpp" : codeLanguage}
+                    value={code}
+                    onChange={(value) => setCode(value || "")}
+                    theme="vs-dark"
+                    options={{ minimap: { enabled: false }, fontSize: 13, wordWrap: "on", scrollBeyondLastLine: false }}
+                  />
+                </div>
+                <Textarea
+                  value={customInput}
+                  onChange={(e) => setCustomInput(e.target.value)}
+                  placeholder="Custom input..."
+                  className="min-h-[70px] py-2 px-3 text-xs"
+                />
+                <div className="grid grid-cols-2 gap-3">
+                  <Button type="button" disabled={runningCode} onClick={() => runCode("run")} className="py-2.5">
+                    <Play size={14} /> {runningCode ? "RUNNING..." : "RUN CODE"}
+                  </Button>
+                  <Button type="button" disabled={runningCode} onClick={() => runCode("submit")} className="py-2.5">
+                    <Send size={14} /> SUBMIT CODE
+                  </Button>
+                </div>
+                {execution?.result && (
+                  <div className="border border-line bg-paper p-4 text-xs font-mono space-y-2">
+                    <div className="flex justify-between">
+                      <span className={execution.result.status === "Accepted" ? "text-accent" : "text-ink"}>{execution.result.status}</span>
+                      <span>{execution.result.passed || 0}/{execution.result.total || 0} tests · {execution.result.runtime_ms || 0}ms · {execution.result.memory_kb || 0}KB</span>
+                    </div>
+                    {execution.result.output && <div className="text-ink-500">{execution.result.output}</div>}
+                    {execution.result.errors && <div className="text-red-700">{execution.result.errors}</div>}
+                    <div className="grid grid-cols-3 gap-2">
+                      {(execution.result.test_cases || []).map((tc) => (
+                        <div key={tc.name} className={`border px-2 py-1 ${tc.passed ? "border-accent text-accent" : "border-line text-ink-400"}`}>{tc.name}</div>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </div>
 
@@ -288,10 +370,10 @@ export default function StudentDSA() {
                     {attempts.map((att) => (
                       <div key={att.attempt_id} className="p-3 border border-line bg-paper text-xs font-mono space-y-1.5">
                         <div className="flex justify-between items-center">
-                          {att.status === "solved" ? (
+                          {(att.status === "solved" || att.status === "Accepted") ? (
                             <Badge variant="success" className="text-[8px] py-0.2">SOLVED</Badge>
                           ) : (
-                            <Badge variant="warning" className="text-[8px] py-0.2">ATTEMPTED</Badge>
+                            <Badge variant="warning" className="text-[8px] py-0.2">{att.status || "ATTEMPTED"}</Badge>
                           )}
                           <span className="text-ink-400 text-[10px]">
                             {att.created_at ? new Date(att.created_at).toLocaleDateString() : ""}
@@ -302,6 +384,9 @@ export default function StudentDSA() {
                         )}
                         {att.language && (
                           <div><span className="text-ink-400">LANGUAGE:</span> {att.language}</div>
+                        )}
+                        {att.runtime_ms && (
+                          <div><span className="text-ink-400">RUNTIME:</span> {att.runtime_ms}ms / {att.memory_kb}KB</div>
                         )}
                         {att.approach && (
                           <div><span className="text-ink-400">APPROACH:</span> {att.approach}</div>

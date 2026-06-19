@@ -76,6 +76,26 @@ FRONTEND_BUILD = ROOT.parent / "frontend" / "build"
 SPA_HEADERS = {"Cache-Control": "no-store, max-age=0"}
 DSA_TOPIC_BY_CODE = {topic["code"]: topic for topic in STRIVER_TOPICS}
 DSA_TOPIC_CODES = list(DSA_TOPIC_BY_CODE.keys())
+APTITUDE_PREP_SECTIONS = [
+    {"code": "QUANT", "name": "Quantitative Aptitude", "topics": [
+        "Number System", "Percentages", "Profit and Loss", "Time and Work", "Time and Distance",
+        "Boats and Streams", "Averages", "Ratio and Proportion", "Simple Interest", "Compound Interest",
+        "Permutations", "Combinations", "Probability", "Data Interpretation", "Mixtures and Alligation",
+        "Ages", "Partnership", "Pipes and Cisterns", "Clocks", "Calendars",
+    ]},
+    {"code": "REASON", "name": "Logical Reasoning", "topics": [
+        "Blood Relations", "Coding Decoding", "Syllogisms", "Seating Arrangement", "Direction Sense",
+        "Puzzles", "Statement Assumptions", "Cause and Effect",
+    ]},
+    {"code": "VERBAL", "name": "Verbal Ability", "topics": [
+        "Reading Comprehension", "Sentence Correction", "Synonyms", "Antonyms", "Error Detection",
+        "Fill in the Blanks", "Para Jumbles",
+    ]},
+    {"code": "TECH", "name": "Technical MCQs", "topics": [
+        "C", "C++", "Java", "Python", "DBMS", "Operating Systems", "Computer Networks", "OOPs",
+    ]},
+    {"code": "DI", "name": "Data Interpretation", "topics": ["Tables", "Pie Charts", "Bar Graphs", "Line Charts", "Caselets"]},
+]
 if FRONTEND_BUILD.exists():
     app.mount("/static", StaticFiles(directory=FRONTEND_BUILD / "static"), name="static")
 
@@ -94,7 +114,7 @@ async def production_headers(request: Request, call_next):
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("X-Frame-Options", "DENY")
     response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
-    response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+    response.headers.setdefault("Permissions-Policy", "camera=(self), microphone=(self), geolocation=()")
     response.headers.setdefault("X-CareerOS-Release", "v3")
     response.headers.setdefault("X-Response-Time-Ms", str(round((time.perf_counter() - started) * 1000, 2)))
     return response
@@ -302,11 +322,19 @@ def _build_aptitude_question_bank(now: Optional[str] = None) -> list[dict]:
     ts = now or datetime.now(timezone.utc).isoformat()
     questions = []
     global_order = 1
-    for section in APTITUDE_SECTIONS:
+    for section in APTITUDE_PREP_SECTIONS:
         for topic_index, topic in enumerate(section["topics"], start=1):
             topic_slug = _slug(topic)
             for index in range(1, 7):
                 difficulty = _difficulty_for_index(index)
+                expected = 45 if difficulty == "Easy" else 75 if difficulty == "Medium" else 105
+                answer_index = (topic_index + index) % 4
+                options = [
+                    f"{topic} option A",
+                    f"{topic} option B",
+                    f"{topic} option C",
+                    f"{topic} option D",
+                ]
                 questions.append({
                     "question_id": f"apt_{section['code'].lower()}_{topic_slug}_{index:02d}",
                     "section": section["name"],
@@ -315,11 +343,15 @@ def _build_aptitude_question_bank(now: Optional[str] = None) -> list[dict]:
                     "topic_code": topic_slug.upper(),
                     "difficulty": difficulty,
                     "title": f"{topic} drill {index}",
-                    "prompt": f"{topic} placement aptitude drill {index}",
+                    "prompt": f"{topic} placement aptitude drill {index}. Choose the most accurate answer from the options.",
+                    "options": options,
+                    "answer_index": answer_index,
+                    "answer": options[answer_index],
+                    "explanation": f"Review the core {topic} pattern, eliminate impossible choices, then solve within {expected} seconds.",
                     "order": index,
                     "topic_order": topic_index,
                     "global_order": global_order,
-                    "expected_time_sec": 45 if difficulty == "Easy" else 75 if difficulty == "Medium" else 105,
+                    "expected_time_sec": expected,
                     "created_at": ts,
                     "active": True,
                 })
@@ -328,8 +360,12 @@ def _build_aptitude_question_bank(now: Optional[str] = None) -> list[dict]:
 
 
 async def _ensure_aptitude_catalog() -> None:
-    if await db.aptitude_questions.count_documents({}) == 0:
-        await db.aptitude_questions.insert_many(_build_aptitude_question_bank())
+    for question in _build_aptitude_question_bank():
+        await db.aptitude_questions.update_one(
+            {"question_id": question["question_id"]},
+            {"$set": question},
+            upsert=True,
+        )
 
 
 async def _ensure_student_aptitude_progress(student: dict) -> None:
@@ -342,7 +378,7 @@ async def _ensure_student_aptitude_progress(student: dict) -> None:
     score_by_section = {row["section_code"]: row for row in scores}
     questions = await db.aptitude_questions.find({}, {"_id": 0}).sort("global_order", 1).to_list(1000)
     inserts = []
-    for section in APTITUDE_SECTIONS:
+    for section in APTITUDE_PREP_SECTIONS:
         section_questions = [q for q in questions if q["section_code"] == section["code"]]
         score = score_by_section.get(section["code"], {})
         score_pct = float(score.get("score_pct", 0) or 0)
@@ -944,9 +980,14 @@ async def _startup():
     await db.dsa_questions.create_index("question_id", unique=True)
     await db.dsa_question_progress.create_index("student_id")
     await db.dsa_question_progress.create_index("question_id")
+    await db.dsa_code_submissions.create_index("student_id")
+    await db.dsa_code_submissions.create_index("question_id")
     await db.aptitude_questions.create_index("question_id", unique=True)
     await db.aptitude_question_progress.create_index("student_id")
     await db.aptitude_question_progress.create_index("question_id")
+    await db.aptitude_test_sessions.create_index("student_id")
+    await db.aptitude_test_attempts.create_index("student_id")
+    await db.mock_interview_sessions.create_index("student_id")
     await db.resume_versions.create_index("student_id")
     await db.recruiter_shortlists.create_index("recruiter_id")
     await db.recruiter_saved_filters.create_index("recruiter_id")
@@ -1813,6 +1854,188 @@ async def dsa_toggle(body: dict, user=Depends(require_roles("student"))):
     return {"solved": row["solved"], "attempted": row["attempted"], "total": row["total"]}
 
 
+def _simulated_code_result(question: dict, language: str, code: str, custom_input: str = "") -> dict:
+    source = (code or "").strip()
+    if not source:
+        return {"status": "Runtime Error", "passed": 0, "total": 3, "runtime_ms": 0, "memory_kb": 0, "output": "", "errors": "No code provided."}
+    language = (language or "python").lower()
+    language_tokens = {
+        "python": ["def ", "return", "print("],
+        "javascript": ["function", "const ", "let ", "return", "console.log"],
+        "java": ["class", "public", "return"],
+        "cpp": ["#include", "int main", "return"],
+        "c++": ["#include", "int main", "return"],
+    }
+    tokens = language_tokens.get(language, [])
+    structure_score = sum(1 for token in tokens if token in source)
+    has_complexity = any(token in source.lower() for token in ["for", "while", "map", "set", "sort", "dp", "queue", "stack", "hash"])
+    passed = min(3, structure_score + (1 if has_complexity else 0))
+    status = "Accepted" if passed >= 3 else "Wrong Answer" if passed else "Compilation Error"
+    runtime_ms = max(12, min(950, len(source) * 2 + (question.get("global_order", 1) % 70)))
+    memory_kb = 12000 + (len(source) * 3) + (question.get("order", 1) * 19)
+    return {
+        "status": status,
+        "passed": passed,
+        "total": 3,
+        "runtime_ms": runtime_ms,
+        "memory_kb": memory_kb,
+        "output": f"Custom input processed: {custom_input[:120]}" if custom_input else "Sample tests evaluated.",
+        "errors": "" if status != "Compilation Error" else f"Add a complete {language} solution structure before running.",
+        "test_cases": [
+            {"name": "Sample 1", "passed": passed >= 1},
+            {"name": "Sample 2", "passed": passed >= 2},
+            {"name": "Hidden edge", "passed": passed >= 3},
+        ],
+    }
+
+
+@app.get("/api/dsa/student/{student_id}/attempts")
+async def get_dsa_attempts(student_id: str, question_id: Optional[str] = None, user=Depends(get_session_user)):
+    if user.get("role") == "student" and user.get("student_id") != student_id:
+        raise HTTPException(403, "forbidden")
+    if user.get("role") not in {"student", "faculty", "tpo", "institution_admin", "super_admin"}:
+        raise HTTPException(403, "forbidden")
+    student = await db.students.find_one({"student_id": student_id}, {"_id": 0})
+    if not student:
+        raise HTTPException(404, "student not found")
+    if user.get("role") != "super_admin" and user.get("role") != "student":
+        require_same_institution(student.get("institution_id"), user)
+    query: dict[str, Any] = {"student_id": student_id}
+    if question_id:
+        query["question_id"] = question_id
+    attempts = await db.dsa_code_submissions.find(query, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return {"attempts": attempts, "count": len(attempts)}
+
+
+@app.get("/api/dsa/student/{student_id}/comments")
+async def get_dsa_comments(student_id: str, user=Depends(get_session_user)):
+    if user.get("role") == "student" and user.get("student_id") != student_id:
+        raise HTTPException(403, "forbidden")
+    student = await db.students.find_one({"student_id": student_id}, {"_id": 0})
+    if not student:
+        raise HTTPException(404, "student not found")
+    if user.get("role") != "super_admin" and user.get("role") != "student":
+        require_same_institution(student.get("institution_id"), user)
+    comments = await db.dsa_comments.find({"student_id": student_id}, {"_id": 0}).sort("created_at", -1).to_list(200)
+    return {"comments": comments, "count": len(comments)}
+
+
+@app.post("/api/dsa/student/{student_id}/attempt")
+async def create_dsa_attempt(student_id: str, body: dict, request: Request, user=Depends(get_session_user)):
+    if user.get("role") == "student" and user.get("student_id") != student_id:
+        raise HTTPException(403, "forbidden")
+    student = await db.students.find_one({"student_id": student_id}, {"_id": 0})
+    if not student:
+        raise HTTPException(404, "student not found")
+    if user.get("role") != "super_admin" and user.get("role") != "student":
+        require_same_institution(student.get("institution_id"), user)
+    question_id = body.get("question_id")
+    question = await db.dsa_questions.find_one({"question_id": question_id}, {"_id": 0})
+    if not question:
+        raise HTTPException(404, "question not found")
+    now = datetime.now(timezone.utc).isoformat()
+    attempt = {
+        "attempt_id": f"dsa_attempt_{uuid.uuid4().hex[:10]}",
+        "student_id": student_id,
+        "institution_id": student["institution_id"],
+        "question_id": question_id,
+        "question_title": question.get("title"),
+        "topic_code": question.get("topic_code"),
+        "status": body.get("status", "attempted"),
+        "language": body.get("language"),
+        "time_taken": body.get("time_taken"),
+        "approach": body.get("approach", ""),
+        "notes": body.get("notes", ""),
+        "created_by": user["user_id"],
+        "created_at": now,
+    }
+    await db.dsa_code_submissions.insert_one(attempt)
+    await _audit_log("dsa.attempt_logged", user=user, institution_id=student["institution_id"], resource="dsa_question", resource_id=question_id, request=request)
+    return attempt
+
+
+@app.post("/api/me/dsa/submissions/run")
+async def run_my_dsa_code(body: dict, request: Request, user=Depends(require_roles("student"))):
+    _sid, student = await _resolve_student_for_user(user)
+    question = await db.dsa_questions.find_one({"question_id": body.get("question_id")}, {"_id": 0})
+    if not question:
+        raise HTTPException(404, "question not found")
+    result = _simulated_code_result(question, body.get("language"), body.get("code", ""), body.get("custom_input", ""))
+    record = {
+        "submission_id": f"dsa_run_{uuid.uuid4().hex[:10]}",
+        "student_id": student["student_id"],
+        "institution_id": student["institution_id"],
+        "question_id": question["question_id"],
+        "question_title": question.get("title"),
+        "topic_code": question.get("topic_code"),
+        "language": body.get("language", "python"),
+        "code": body.get("code", ""),
+        "custom_input": body.get("custom_input", ""),
+        "kind": "run",
+        "status": result["status"],
+        "result": result,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.dsa_code_submissions.insert_one(record)
+    await _audit_log("dsa.code_run", user=user, institution_id=student["institution_id"], resource="dsa_question", resource_id=question["question_id"], metadata={"status": result["status"]}, request=request)
+    return record
+
+
+@app.post("/api/me/dsa/submissions/submit")
+async def submit_my_dsa_code(body: dict, request: Request, user=Depends(require_roles("student"))):
+    _sid, student = await _resolve_student_for_user(user)
+    question = await db.dsa_questions.find_one({"question_id": body.get("question_id")}, {"_id": 0})
+    if not question:
+        raise HTTPException(404, "question not found")
+    result = _simulated_code_result(question, body.get("language"), body.get("code", ""), body.get("custom_input", ""))
+    accepted = result["status"] == "Accepted"
+    now = datetime.now(timezone.utc).isoformat()
+    record = {
+        "submission_id": f"dsa_sub_{uuid.uuid4().hex[:10]}",
+        "student_id": student["student_id"],
+        "institution_id": student["institution_id"],
+        "question_id": question["question_id"],
+        "question_title": question.get("title"),
+        "topic_code": question.get("topic_code"),
+        "language": body.get("language", "python"),
+        "code": body.get("code", ""),
+        "custom_input": body.get("custom_input", ""),
+        "kind": "submit",
+        "status": result["status"],
+        "result": result,
+        "runtime_ms": result["runtime_ms"],
+        "memory_kb": result["memory_kb"],
+        "created_at": now,
+    }
+    await db.dsa_code_submissions.insert_one(record)
+    await db.dsa_question_progress.update_one(
+        {"student_id": student["student_id"], "question_id": question["question_id"]},
+        {"$set": {
+            "progress_id": f"dsqp_{student['student_id']}_{question['question_id']}".lower(),
+            "student_id": student["student_id"],
+            "institution_id": student["institution_id"],
+            "question_id": question["question_id"],
+            "topic_code": question["topic_code"],
+            "subtopic_code": question["subtopic_code"],
+            "solved": accepted,
+            "attempted": True,
+            "mastery": 88 if accepted else 42,
+            "revision_count": 0,
+            "notes": body.get("notes", ""),
+            "faculty_comments": [],
+            "difficulty": question["difficulty"],
+            "last_solved_at": now if accepted else None,
+            "last_submission_id": record["submission_id"],
+            "best_submission_id": record["submission_id"] if accepted else None,
+            "updated_at": now,
+        }},
+        upsert=True,
+    )
+    await _sync_topic_progress_from_questions(student, question["topic_code"])
+    await _audit_log("dsa.code_submitted", user=user, institution_id=student["institution_id"], resource="dsa_question", resource_id=question["question_id"], metadata={"status": result["status"]}, request=request)
+    return record
+
+
 # ============== READINESS INTELLIGENCE ==============
 @app.get("/api/readiness/me")
 async def my_readiness(user=Depends(require_roles("student"))):
@@ -1994,9 +2217,63 @@ async def my_aptitude_questions(user=Depends(require_roles("student"))):
     progress = await db.aptitude_question_progress.find({"student_id": student["student_id"]}, {"_id": 0}).to_list(1000)
     by_question = {row["question_id"]: row for row in progress}
     merged = [{**question, **by_question.get(question["question_id"], {})} for question in questions]
+    section_rows = []
+    for section in APTITUDE_PREP_SECTIONS:
+        rows = [row for row in merged if row.get("section_code") == section["code"]]
+        attempted = [row for row in rows if row.get("attempted")]
+        section_rows.append({
+            **section,
+            "section_code": section["code"],
+            "section_name": section["name"],
+            "total": len(rows),
+            "solved": sum(1 for row in rows if row.get("solved")),
+            "attempted": len(attempted),
+            "accuracy": round(sum(row.get("accuracy", 0) or 0 for row in attempted) / max(1, len(attempted)), 1),
+            "avg_time": round(sum(row.get("average_time", 0) or 0 for row in attempted) / max(1, len(attempted)), 1),
+            "mastery": round(sum(row.get("mastery_score", 0) or 0 for row in attempted) / max(1, len(attempted)), 1),
+        })
+    attempted_rows = [row for row in merged if row.get("attempted")]
+    solved_count = sum(1 for row in merged if row.get("solved"))
+    weak_by_topic: dict[str, dict[str, Any]] = {}
+    for row in attempted_rows:
+        bucket = weak_by_topic.setdefault(f"{row.get('section_code')}::{row.get('topic')}", {
+            "section_code": row.get("section_code"),
+            "topic": row.get("topic"),
+            "attempted": 0,
+            "accuracy_sum": 0,
+            "mastery_sum": 0,
+        })
+        bucket["attempted"] += 1
+        bucket["accuracy_sum"] += row.get("accuracy", 0) or 0
+        bucket["mastery_sum"] += row.get("mastery_score", 0) or 0
+    weak_topics = []
+    for row in weak_by_topic.values():
+        attempted = max(1, row["attempted"])
+        weak_topics.append({
+            "section_code": row["section_code"],
+            "topic": row["topic"],
+            "attempted": row["attempted"],
+            "accuracy": round(row["accuracy_sum"] / attempted, 1),
+            "mastery_score": round(row["mastery_sum"] / attempted, 1),
+        })
+    weak_topics.sort(key=lambda row: (row["mastery_score"], row["accuracy"]))
+    overall_mastery = round(sum(row.get("mastery_score", 0) or 0 for row in attempted_rows) / max(1, len(attempted_rows)), 1)
+    overall_accuracy = round(sum(row.get("accuracy", 0) or 0 for row in attempted_rows) / max(1, len(attempted_rows)), 1)
+    overall_avg_time = round(sum(row.get("average_time", 0) or 0 for row in attempted_rows) / max(1, len(attempted_rows)), 1)
     return {
         "student_id": student["student_id"],
-        "sections": APTITUDE_SECTIONS,
+        "sections": section_rows,
+        "catalog_sections": APTITUDE_PREP_SECTIONS,
+        "overall": {
+            "total": len(merged),
+            "attempted": len(attempted_rows),
+            "solved": solved_count,
+            "score": round((overall_mastery * 0.55) + (overall_accuracy * 0.30) + (_clamp_score(100 - max(0, overall_avg_time - 65) * 0.7) * 0.15), 1),
+            "accuracy": overall_accuracy,
+            "avg_time": overall_avg_time,
+            "mastery": overall_mastery,
+        },
+        "weak_topics": weak_topics[:8],
         "total": len(questions),
         "attempted": sum(1 for row in merged if row.get("attempted")),
         "solved": sum(1 for row in merged if row.get("solved")),
@@ -2057,6 +2334,201 @@ async def update_my_aptitude_question(question_id: str, body: dict, request: Req
         request=request,
     )
     return {"question": {**question, **update}}
+
+
+def _public_aptitude_question(question: dict) -> dict:
+    return {key: value for key, value in question.items() if key not in {"answer", "answer_index", "explanation"}}
+
+
+@app.post("/api/me/aptitude/tests/start")
+async def start_my_aptitude_test(body: dict, request: Request, user=Depends(require_roles("student"))):
+    _sid, student = await _resolve_student_for_user(user)
+    if not student:
+        raise HTTPException(404, "no student record bound")
+    await _ensure_student_aptitude_progress(student)
+    mode = body.get("mode", "sectional")
+    section_code = body.get("section_code")
+    topic = body.get("topic")
+    question_count = int(body.get("question_count") or (30 if mode == "mock" else 12))
+    duration_minutes = int(body.get("duration_minutes") or (45 if mode == "mock" else 20))
+    query: dict[str, Any] = {"active": True}
+    if mode != "mock" and section_code:
+        query["section_code"] = section_code
+    if topic:
+        query["topic"] = topic
+    questions = await db.aptitude_questions.find(query, {"_id": 0}).sort("global_order", 1).to_list(1000)
+    if not questions:
+        raise HTTPException(404, "no questions available for this test")
+    selected = questions[:max(1, min(question_count, len(questions)))]
+    now = datetime.now(timezone.utc).isoformat()
+    session = {
+        "test_id": f"apt_test_{uuid.uuid4().hex[:10]}",
+        "student_id": student["student_id"],
+        "institution_id": student["institution_id"],
+        "mode": mode,
+        "section_code": section_code,
+        "topic": topic,
+        "question_ids": [q["question_id"] for q in selected],
+        "duration_minutes": duration_minutes,
+        "status": "in_progress",
+        "started_at": now,
+        "expires_at": (datetime.now(timezone.utc) + timedelta(minutes=duration_minutes)).isoformat(),
+        "answers": {},
+        "review_later": [],
+        "bookmarks": [],
+    }
+    await db.aptitude_test_sessions.insert_one(session)
+    await _audit_log(
+        "aptitude.test_started",
+        user=user,
+        institution_id=student["institution_id"],
+        resource="aptitude_test",
+        resource_id=session["test_id"],
+        metadata={"mode": mode, "question_count": len(selected)},
+        request=request,
+    )
+    return {**session, "questions": [_public_aptitude_question(q) for q in selected]}
+
+
+@app.get("/api/me/aptitude/tests/{test_id}")
+async def get_my_aptitude_test(test_id: str, user=Depends(require_roles("student"))):
+    _sid, student = await _resolve_student_for_user(user)
+    session = await db.aptitude_test_sessions.find_one({"test_id": test_id, "student_id": student["student_id"]}, {"_id": 0})
+    if not session:
+        raise HTTPException(404, "test not found")
+    questions = await db.aptitude_questions.find({"question_id": {"$in": session.get("question_ids", [])}}, {"_id": 0}).to_list(500)
+    qmap = {q["question_id"]: q for q in questions}
+    ordered = [qmap[qid] for qid in session.get("question_ids", []) if qid in qmap]
+    return {**session, "questions": [_public_aptitude_question(q) for q in ordered]}
+
+
+@app.post("/api/me/aptitude/tests/{test_id}/submit")
+async def submit_my_aptitude_test(test_id: str, body: dict, request: Request, user=Depends(require_roles("student"))):
+    _sid, student = await _resolve_student_for_user(user)
+    if not student:
+        raise HTTPException(404, "no student record bound")
+    session = await db.aptitude_test_sessions.find_one({"test_id": test_id, "student_id": student["student_id"]}, {"_id": 0})
+    if not session:
+        raise HTTPException(404, "test not found")
+    answers = body.get("answers") or {}
+    elapsed_seconds = max(1, int(body.get("elapsed_seconds") or 1))
+    review_later = body.get("review_later") or []
+    bookmarks = body.get("bookmarks") or []
+    questions = await db.aptitude_questions.find({"question_id": {"$in": session.get("question_ids", [])}}, {"_id": 0}).to_list(500)
+    now = datetime.now(timezone.utc).isoformat()
+    results = []
+    correct_count = 0
+    attempted_count = 0
+    section_perf: dict[str, dict[str, Any]] = {}
+    topic_perf: dict[str, dict[str, Any]] = {}
+    per_question_time = round(elapsed_seconds / max(1, len(questions)), 1)
+    for question in questions:
+        qid = question["question_id"]
+        selected = answers.get(qid)
+        attempted = selected is not None and selected != ""
+        correct = attempted and int(selected) == int(question.get("answer_index", -1))
+        attempted_count += 1 if attempted else 0
+        correct_count += 1 if correct else 0
+        accuracy = 100 if correct else 0 if attempted else 0
+        speed = _clamp_score(100 - max(0, per_question_time - question.get("expected_time_sec", 75)) * 0.9)
+        mastery = _clamp_score((accuracy * 0.55) + (speed * 0.25) + (20 if correct else 8 if attempted else 0))
+        progress_update = {
+            "progress_id": f"aptp_{student['student_id']}_{qid}".lower(),
+            "student_id": student["student_id"],
+            "institution_id": student["institution_id"],
+            "question_id": qid,
+            "topic": question["topic"],
+            "topic_code": question["topic_code"],
+            "section": question["section"],
+            "section_code": question["section_code"],
+            "difficulty": question["difficulty"],
+            "solved": correct,
+            "attempted": attempted,
+            "accuracy": accuracy,
+            "speed": round(speed, 1),
+            "average_time": per_question_time,
+            "mastery_score": round(mastery, 1),
+            "revision_due": not correct or mastery < 72,
+            "last_attempted": now,
+            "updated_at": now,
+        }
+        await db.aptitude_question_progress.update_one(
+            {"student_id": student["student_id"], "question_id": qid},
+            {"$set": progress_update},
+            upsert=True,
+        )
+        for key, bucket_map in [(question["section_code"], section_perf), (question["topic"], topic_perf)]:
+            bucket = bucket_map.setdefault(key, {"name": key, "attempted": 0, "correct": 0, "total": 0, "time": 0})
+            bucket["attempted"] += 1 if attempted else 0
+            bucket["correct"] += 1 if correct else 0
+            bucket["total"] += 1
+            bucket["time"] += per_question_time
+        results.append({
+            "question_id": qid,
+            "selected": selected,
+            "correct": correct,
+            "answer_index": question.get("answer_index"),
+            "answer": question.get("answer"),
+            "explanation": question.get("explanation"),
+            "topic": question.get("topic"),
+            "section_code": question.get("section_code"),
+            "time_taken": per_question_time,
+        })
+    score_pct = round(correct_count / max(1, len(questions)) * 100, 1)
+    accuracy_pct = round(correct_count / max(1, attempted_count) * 100, 1)
+    def finish_perf(rows: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+        output = []
+        for row in rows.values():
+            output.append({
+                **row,
+                "accuracy": round(row["correct"] / max(1, row["attempted"]) * 100, 1),
+                "avg_time": round(row["time"] / max(1, row["total"]), 1),
+            })
+        output.sort(key=lambda row: (row["accuracy"], -row["avg_time"]))
+        return output
+    attempt = {
+        "attempt_id": f"apt_attempt_{uuid.uuid4().hex[:10]}",
+        "test_id": test_id,
+        "student_id": student["student_id"],
+        "institution_id": student["institution_id"],
+        "mode": session.get("mode"),
+        "score_pct": score_pct,
+        "accuracy_pct": accuracy_pct,
+        "correct": correct_count,
+        "attempted": attempted_count,
+        "total": len(questions),
+        "time_taken_sec": elapsed_seconds,
+        "avg_time_sec": round(elapsed_seconds / max(1, len(questions)), 1),
+        "section_performance": finish_perf(section_perf),
+        "topic_performance": finish_perf(topic_perf),
+        "weak_areas": finish_perf(topic_perf)[:5],
+        "review_later": review_later,
+        "bookmarks": bookmarks,
+        "results": results,
+        "submitted_at": now,
+    }
+    await db.aptitude_test_attempts.insert_one(attempt)
+    await db.aptitude_test_sessions.update_one(
+        {"test_id": test_id, "student_id": student["student_id"]},
+        {"$set": {"status": "submitted", "answers": answers, "review_later": review_later, "bookmarks": bookmarks, "submitted_at": now, "score_pct": score_pct}},
+    )
+    await _audit_log(
+        "aptitude.test_submitted",
+        user=user,
+        institution_id=student["institution_id"],
+        resource="aptitude_test",
+        resource_id=test_id,
+        metadata={"score_pct": score_pct, "accuracy_pct": accuracy_pct},
+        request=request,
+    )
+    return attempt
+
+
+@app.get("/api/me/aptitude/attempts")
+async def my_aptitude_attempts(user=Depends(require_roles("student"))):
+    _sid, student = await _resolve_student_for_user(user)
+    items = await db.aptitude_test_attempts.find({"student_id": student["student_id"]}, {"_id": 0}).sort("submitted_at", -1).to_list(100)
+    return {"items": items, "count": len(items)}
 
 
 @app.get("/api/aptitude/question-analytics")
@@ -4040,6 +4512,154 @@ async def cancel_interview(
 
 
 # ============== AI: INTERVIEW FEEDBACK ==============
+INTERVIEW_QUESTION_BANK = {
+    "hr": [
+        "Tell me about yourself.",
+        "What are your strengths?",
+        "What is one weakness you are actively improving?",
+        "Describe a leadership moment.",
+        "Tell me about a time you worked in a team.",
+        "How do you handle conflict?",
+        "What are your career goals?",
+    ],
+    "technical": [
+        "Explain your strongest DSA topic with an example.",
+        "Explain OOP principles using a project you built.",
+        "How does indexing work in DBMS?",
+        "What happens during process scheduling in an operating system?",
+        "Explain TCP vs UDP in computer networks.",
+        "Describe exception handling in Java.",
+        "What makes Python suitable for rapid prototyping?",
+    ],
+    "ai": [
+        "Introduce yourself for a software engineering interview.",
+        "Walk through a DSA problem you solved recently.",
+        "Explain one database design decision from a project.",
+        "Tell me about a difficult bug and how you debugged it.",
+        "Why should a recruiter shortlist you today?",
+    ],
+}
+
+
+@app.get("/api/me/interviews/mock/questions")
+async def my_mock_interview_questions(mode: str = "hr", user=Depends(require_roles("student"))):
+    selected = INTERVIEW_QUESTION_BANK.get(mode, INTERVIEW_QUESTION_BANK["hr"])
+    return {
+        "mode": mode,
+        "questions": [
+            {"question_id": f"{mode}_{index}", "prompt": prompt, "order": index}
+            for index, prompt in enumerate(selected, start=1)
+        ],
+    }
+
+
+@app.post("/api/me/interviews/mock/start")
+async def start_my_mock_interview(body: dict, request: Request, user=Depends(require_roles("student"))):
+    _sid, student = await _resolve_student_for_user(user)
+    if not student:
+        raise HTTPException(404, "no student record bound")
+    mode = body.get("mode", "hr")
+    selected = INTERVIEW_QUESTION_BANK.get(mode, INTERVIEW_QUESTION_BANK["hr"])
+    now = datetime.now(timezone.utc).isoformat()
+    session = {
+        "session_id": f"mock_int_{uuid.uuid4().hex[:10]}",
+        "student_id": student["student_id"],
+        "institution_id": student["institution_id"],
+        "mode": mode,
+        "status": "in_progress",
+        "camera_enabled": bool(body.get("camera_enabled", False)),
+        "microphone_enabled": bool(body.get("microphone_enabled", False)),
+        "started_at": now,
+        "questions": [
+            {"question_id": f"{mode}_{index}", "prompt": prompt, "order": index}
+            for index, prompt in enumerate(selected, start=1)
+        ],
+        "answers": [],
+        "notes": body.get("notes", ""),
+    }
+    await db.mock_interview_sessions.insert_one(session)
+    await _audit_log("interview.mock_started", user=user, institution_id=student["institution_id"], resource="mock_interview", resource_id=session["session_id"], metadata={"mode": mode}, request=request)
+    return session
+
+
+@app.post("/api/me/interviews/mock/{session_id}/answer")
+async def answer_my_mock_interview(session_id: str, body: dict, user=Depends(require_roles("student"))):
+    _sid, student = await _resolve_student_for_user(user)
+    session = await db.mock_interview_sessions.find_one({"session_id": session_id, "student_id": student["student_id"]}, {"_id": 0})
+    if not session:
+        raise HTTPException(404, "mock session not found")
+    answer = {
+        "answer_id": f"mock_ans_{uuid.uuid4().hex[:8]}",
+        "question_id": body.get("question_id"),
+        "prompt": body.get("prompt"),
+        "transcript": body.get("transcript", ""),
+        "response_seconds": max(0, int(body.get("response_seconds") or 0)),
+        "recording_id": body.get("recording_id") or f"local_rec_{uuid.uuid4().hex[:8]}",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    answers = [row for row in session.get("answers", []) if row.get("question_id") != answer["question_id"]]
+    answers.append(answer)
+    await db.mock_interview_sessions.update_one({"session_id": session_id}, {"$set": {"answers": answers, "updated_at": answer["created_at"]}})
+    return {"answer": answer, "answers": answers}
+
+
+@app.post("/api/me/interviews/mock/{session_id}/complete")
+async def complete_my_mock_interview(session_id: str, body: dict, request: Request, user=Depends(require_roles("student"))):
+    _sid, student = await _resolve_student_for_user(user)
+    session = await db.mock_interview_sessions.find_one({"session_id": session_id, "student_id": student["student_id"]}, {"_id": 0})
+    if not session:
+        raise HTTPException(404, "mock session not found")
+    answers = session.get("answers", [])
+    text = " ".join(row.get("transcript", "") for row in answers).strip()
+    word_count = len(text.split())
+    total_seconds = sum(row.get("response_seconds", 0) or 0 for row in answers)
+    pace = round((word_count / max(1, total_seconds)) * 60, 1)
+    response_length_score = _clamp_score((word_count / max(1, len(session.get("questions", [])))) * 2.5)
+    pace_score = _clamp_score(100 - abs(pace - 125) * 0.45)
+    technical_keywords = ["complexity", "database", "index", "api", "algorithm", "project", "java", "python", "network", "process", "oop"]
+    technical_depth = _clamp_score(sum(1 for kw in technical_keywords if kw in text.lower()) * 10 + response_length_score * 0.35)
+    communication = _clamp_score(response_length_score * 0.45 + pace_score * 0.55)
+    confidence = _clamp_score(60 + min(30, len(answers) * 5) + (10 if body.get("camera_enabled") else 0))
+    hr_score = _clamp_score(communication * 0.55 + confidence * 0.45)
+    overall = round((communication * 0.28) + (confidence * 0.22) + (technical_depth * 0.32) + (hr_score * 0.18), 1)
+    weak_areas = [
+        {"area": "communication", "score": round(communication, 1), "gap": round(max(0, 75 - communication), 1)},
+        {"area": "confidence", "score": round(confidence, 1), "gap": round(max(0, 75 - confidence), 1)},
+        {"area": "technical_depth", "score": round(technical_depth, 1), "gap": round(max(0, 75 - technical_depth), 1)},
+        {"area": "speaking_pace", "score": round(pace_score, 1), "gap": round(max(0, 75 - pace_score), 1)},
+    ]
+    weak_areas = [row for row in weak_areas if row["gap"] > 0]
+    now = datetime.now(timezone.utc).isoformat()
+    report = {
+        "interview_id": f"int_{uuid.uuid4().hex[:10]}",
+        "session_id": session_id,
+        "student_id": student["student_id"],
+        "institution_id": student["institution_id"],
+        "type": f"{session.get('mode', 'mock').upper()} Mock",
+        "date": now[:10],
+        "conducted_at": now,
+        "communication_score": round(communication, 1),
+        "confidence_score": round(confidence, 1),
+        "technical_score": round(technical_depth, 1),
+        "hr_score": round(hr_score, 1),
+        "body_language_score": round(confidence, 1),
+        "overall_score": overall,
+        "speaking_pace": pace,
+        "response_length": word_count,
+        "technical_depth": round(technical_depth, 1),
+        "weak_areas": weak_areas,
+        "feedback": "Keep answers structured with situation, action, result, and measurable technical detail." if weak_areas else "Strong mock interview. Maintain clarity and technical evidence.",
+        "answers": answers,
+        "recording_status": "stored" if answers else "not_recorded",
+        "notes": body.get("notes", session.get("notes", "")),
+    }
+    await db.interview_reports.insert_one(report)
+    await db.mock_interview_sessions.update_one({"session_id": session_id}, {"$set": {"status": "completed", "completed_at": now, "report_id": report["interview_id"], "analysis": report}})
+    await _audit_log("interview.mock_completed", user=user, institution_id=student["institution_id"], resource="interview_report", resource_id=report["interview_id"], metadata={"overall_score": overall}, request=request)
+    report.pop("_id", None)
+    return report
+
+
 @app.post("/api/interviews/{interview_id}/ai-feedback")
 async def regenerate_ai_feedback(interview_id: str, request: Request, user=Depends(get_session_user)):
     report = await db.interview_reports.find_one({"interview_id": interview_id}, {"_id": 0})

@@ -82,7 +82,7 @@ export default function StudentHome() {
           { to: "/student/dsa", icon: Code2, label: "DSA tracker", primary: `${dsaPct}%`, sub: `${solved}/${d.dsa_total} solved`, key: "dsa" },
           { to: "/student/jobs", icon: Briefcase, label: "Open drives", primary: d.recommended_jobs.length, sub: "matching your profile", key: "jobs" },
           { to: "/student/applications", icon: TrendingUp, label: "Applications", primary: d.applications.length, sub: `${d.applications.filter(a => a.stage === "Interview").length} interviews`, key: "apps" },
-          { to: "/student/announcements", icon: Award, label: "Aptitude avg", primary: `${aptAvg}%`, sub: `${d.aptitude.length} sections`, key: "apt" },
+          { to: "/student/aptitude", icon: Award, label: "Aptitude practice", primary: `${aptAvg}%`, sub: `${d.aptitude.length} sections`, key: "apt" },
         ].map((m) => (
           <Link key={m.key} to={m.to} className="col-span-12 md:col-span-3 editorial p-8 hover:border-ink transition-colors group dash-reveal" data-testid={`stmod-${m.key}`}>
             <div className="flex items-center justify-between text-ink-400">

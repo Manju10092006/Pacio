@@ -1,158 +1,192 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
-import { Badge, Progress, EmptyState } from "../components/Primitives";
+import { Badge, Progress, Select } from "../components/Primitives";
 import { PageTransition, CounterAnimation, DashboardReveal } from "../components/Motion";
-import { DataTable } from "../components/DataTable";
+import { Camera, Mic, MicOff, MonitorUp, Play, Send, Video, VideoOff } from "lucide-react";
+import { toast } from "sonner";
 
 export default function StudentInterviews() {
-  const [d, setD] = useState(null);
-  const [schedule, setSchedule] = useState([]);
+  const [history, setHistory] = useState(null);
+  const [mode, setMode] = useState("hr");
+  const [session, setSession] = useState(null);
+  const [active, setActive] = useState(0);
+  const [answer, setAnswer] = useState("");
+  const [notes, setNotes] = useState("");
+  const [cameraOn, setCameraOn] = useState(false);
+  const [micOn, setMicOn] = useState(false);
+  const [seconds, setSeconds] = useState(0);
+  const [feedback, setFeedback] = useState(null);
+  const videoRef = useRef(null);
+  const streamRef = useRef(null);
 
+  const load = () => api.get("/interviews/history").then(({ data }) => setHistory(data)).catch(() => setHistory({ items: [] }));
+  useEffect(() => { load(); }, []);
   useEffect(() => {
-    Promise.allSettled([
-      api.get("/interviews/history"),
-      api.get("/interviews/schedule"),
-    ]).then(([histRes, schedRes]) => {
-      const hist = histRes.status === "fulfilled" ? histRes.value.data : {};
-      setD(hist);
-      if (schedRes.status === "fulfilled") setSchedule(schedRes.value.data?.interviews || schedRes.value.data || []);
+    if (!session || feedback) return undefined;
+    const id = setInterval(() => setSeconds((value) => value + 1), 1000);
+    return () => clearInterval(id);
+  }, [session, feedback]);
+
+  const startCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      streamRef.current = stream;
+      if (videoRef.current) videoRef.current.srcObject = stream;
+      setCameraOn(true);
+      setMicOn(true);
+    } catch {
+      toast.error("Camera or microphone permission was not granted");
+    }
+  };
+
+  const toggleMic = () => {
+    const enabled = !micOn;
+    streamRef.current?.getAudioTracks?.().forEach((track) => { track.enabled = enabled; });
+    setMicOn(enabled);
+  };
+
+  const toggleCamera = () => {
+    const enabled = !cameraOn;
+    streamRef.current?.getVideoTracks?.().forEach((track) => { track.enabled = enabled; });
+    setCameraOn(enabled);
+  };
+
+  const startInterview = async () => {
+    const { data } = await api.post("/me/interviews/mock/start", { mode, camera_enabled: cameraOn, microphone_enabled: micOn, notes });
+    setSession(data);
+    setActive(0);
+    setAnswer("");
+    setSeconds(0);
+    setFeedback(null);
+    toast.success("Mock interview started");
+  };
+
+  const saveAnswer = async () => {
+    const question = session?.questions?.[active];
+    if (!question) return;
+    await api.post(`/me/interviews/mock/${session.session_id}/answer`, {
+      question_id: question.question_id,
+      prompt: question.prompt,
+      transcript: answer,
+      response_seconds: Math.max(20, seconds),
+      recording_id: cameraOn ? `browser_recording_${question.question_id}` : null,
     });
-  }, []);
+    setAnswer("");
+    setActive((index) => Math.min(index + 1, session.questions.length - 1));
+    toast.success("Answer saved");
+  };
 
-  if (!d) return <div className="font-mono text-xs text-ink-400 p-8">LOADING INTERVIEWS...</div>;
+  const completeInterview = async () => {
+    if (answer.trim()) await saveAnswer();
+    const { data } = await api.post(`/me/interviews/mock/${session.session_id}/complete`, { notes, camera_enabled: cameraOn, microphone_enabled: micOn });
+    setFeedback(data);
+    await load();
+    toast.success("Interview analysis generated");
+  };
 
-  const myTimeline = d.student_timelines?.[0] || d.my_timeline || {};
-  const reports = d.reports || d.interviews || [];
-  const rubrics = d.rubric_averages || {};
-  const weakAreas = d.weak_areas || myTimeline.weak_areas || [];
-  const improvement = myTimeline.improvement_delta || 0;
-  const latest = myTimeline.latest_score || 0;
-  const first = myTimeline.first_score || 0;
-
-  const schedColumns = [
-    { key: "company", header: "Company", sortable: true, render: (company, row) => (
-      <div>
-        <div className="font-display font-semibold">{company}</div>
-        <div className="text-[10px] text-ink/50 uppercase font-mono">{row.role || row.type}</div>
-      </div>
-    )},
-    { key: "starts_at", header: "Scheduled At", sortable: true, render: (starts, row) => (
-      <span className="font-mono text-xs">{starts || row.date}</span>
-    )},
-    { key: "type", header: "Type", sortable: true, render: (t) => <Badge variant="outline">{t || "Interview"}</Badge> },
-    { key: "status", header: "Status", render: (st) => <Badge variant="solid">{st || "Scheduled"}</Badge> }
-  ];
-
-  const historyColumns = [
-    { key: "type", header: "Type", sortable: true, render: (t) => <span className="font-medium">{t || "Mock"}</span> },
-    { key: "date", header: "Date", sortable: true, render: (d) => <span className="font-mono text-xs text-ink/65">{d || "—"}</span> },
-    { key: "confidence_score", header: "Confidence", sortable: true, render: (s) => <span className="font-mono tnum">{s || 0}</span> },
-    { key: "communication_score", header: "Comm", sortable: true, render: (s) => <span className="font-mono tnum">{s || 0}</span> },
-    { key: "technical_score", header: "Tech", sortable: true, render: (s) => <span className="font-mono tnum">{s || 0}</span> },
-    { key: "hr_score", header: "HR", sortable: true, render: (s) => <span className="font-mono tnum">{s || 0}</span> },
-    { key: "overall_score", header: "Overall", sortable: true, render: (s) => <span className="font-display text-lg text-accent tnum font-semibold">{s || 0}</span> },
-    { key: "feedback", header: "Feedback", render: (fb) => <span className="text-xs text-ink/65 font-serif max-w-[200px] truncate block" title={fb}>{fb || "—"}</span> }
-  ];
+  const latest = history?.items?.[0]?.latest_score || feedback?.overall_score || 0;
+  const reports = history?.items || [];
+  const weakAreas = feedback?.weak_areas || history?.weak_area_detection?.[0]?.weak_areas || [];
+  const activeQuestion = session?.questions?.[active];
 
   return (
     <PageTransition className="space-y-10">
       <DashboardReveal className="grid grid-cols-12 gap-4">
         <div className="col-span-12 md:col-span-8 editorial p-10 dash-reveal">
-          <div className="font-mono text-[10px] tracking-[0.28em] text-ink-400">§ YOUR INTERVIEW INTELLIGENCE</div>
-          <h1 className="font-display text-5xl md:text-6xl tracking-tightest mt-3">Interview readiness.</h1>
+          <div className="font-mono text-[10px] tracking-[0.28em] text-ink-400">VIDEO MOCK INTERVIEW SYSTEM</div>
+          <h1 className="font-display text-5xl md:text-6xl tracking-tightest mt-3">Practice the room.</h1>
           <p className="font-serif text-lg text-ink-500 mt-2 max-w-xl">
-            Track your interview performance, identify weak areas, and prepare for upcoming interviews.
+            Start HR, technical, or AI mock interviews with camera preview, notes, timed answers, and scored feedback.
           </p>
         </div>
-        <div className="col-span-12 md:col-span-4 editorial bg-ink text-bone p-10 flex flex-col justify-between dash-reveal">
-          <div>
-            <div className="font-mono text-[10px] tracking-[0.28em] text-bone/45">LATEST SCORE</div>
-            <div className="font-display text-[8vw] md:text-[6vw] tracking-tightest leading-[0.9] tnum text-accent">
-              <CounterAnimation value={latest || 0} />
+        <div className="col-span-12 md:col-span-4 editorial bg-ink text-bone p-10 dash-reveal">
+          <div className="font-mono text-[10px] tracking-[0.28em] text-bone/45">INTERVIEW READINESS</div>
+          <div className="font-display text-[8vw] md:text-[6vw] leading-[0.9] tnum text-accent">
+            <CounterAnimation value={latest || 0} />
+          </div>
+          <div className="text-bone/60 text-sm mt-1">{reports.length} timeline record{reports.length !== 1 ? "s" : ""}</div>
+          <div className="mt-6"><Progress value={latest || 0} /></div>
+        </div>
+      </DashboardReveal>
+
+      <div className="grid grid-cols-12 gap-4">
+        <div className="col-span-12 lg:col-span-8 editorial overflow-hidden" data-testid="mock-interview-room">
+          <div className="grid grid-cols-12 min-h-[620px]">
+            <div className="col-span-12 md:col-span-7 bg-ink text-bone p-6 flex flex-col">
+              <div className="flex items-center justify-between">
+                <div className="font-mono text-[10px] tracking-[0.24em] text-bone/45">INTERVIEW ROOM</div>
+                <div className="font-mono text-xs text-bone/60">{Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, "0")}</div>
+              </div>
+              <div className="mt-5 relative flex-1 min-h-[360px] border border-bone/10 bg-bone/5 grid place-items-center overflow-hidden">
+                <video ref={videoRef} autoPlay muted playsInline className={`absolute inset-0 h-full w-full object-cover ${cameraOn ? "opacity-100" : "opacity-0"}`} />
+                {!cameraOn && <div className="text-center text-bone/45"><Camera className="mx-auto mb-3" />Camera preview disabled</div>}
+              </div>
+              <div className="mt-4 grid grid-cols-4 gap-2">
+                <button className="btn justify-center py-2 text-[10px]" onClick={startCamera}><Video size={14} /> Enable</button>
+                <button className="btn justify-center py-2 text-[10px]" onClick={toggleCamera}>{cameraOn ? <VideoOff size={14} /> : <Video size={14} />} Camera</button>
+                <button className="btn justify-center py-2 text-[10px]" onClick={toggleMic}>{micOn ? <Mic size={14} /> : <MicOff size={14} />} Mic</button>
+                <button className="btn justify-center py-2 text-[10px]" disabled><MonitorUp size={14} /> Share</button>
+              </div>
             </div>
-            <div className="text-bone/60 text-sm mt-1">{reports.length} interview{reports.length !== 1 ? "s" : ""} recorded</div>
-          </div>
-          <div className="mt-6">
-            <Progress value={latest || 0} />
-          </div>
-        </div>
-      </DashboardReveal>
-
-      <DashboardReveal className="grid grid-cols-12 gap-4">
-        {[
-          { label: "Total Interviews", value: reports.length, sub: "sessions completed" },
-          { label: "Average Score", value: myTimeline.avg_score || Math.round(reports.reduce((a, r) => a + (r.overall_score || 0), 0) / Math.max(1, reports.length)), sub: "overall average" },
-          { label: "Best Score", value: myTimeline.best_score || Math.max(0, ...reports.map(r => r.overall_score || 0)), sub: "peak performance" },
-          { label: "Improvement", value: `${improvement >= 0 ? "+" : ""}${improvement}%`, sub: `from ${first} → ${latest}` },
-        ].map((card) => (
-          <div key={card.label} className="col-span-12 md:col-span-3 editorial p-6 dash-reveal">
-            <div className="font-mono text-[10px] tracking-[0.24em] text-ink-400">{card.label.toUpperCase()}</div>
-            <div className="font-display text-5xl tracking-tightest mt-4 tnum">{card.value}</div>
-            <div className="text-sm text-ink-500 mt-2 font-serif">{card.sub}</div>
-          </div>
-        ))}
-      </DashboardReveal>
-
-      <DashboardReveal className="grid grid-cols-12 gap-4">
-        <div className="col-span-12 md:col-span-6 editorial p-8 bg-bone-100/40 dash-reveal">
-          <div className="font-mono text-[10px] tracking-[0.24em] text-ink-400">RUBRIC BREAKDOWN</div>
-          <div className="mt-6 space-y-4">
-            {["communication", "confidence", "technical", "hr"].map((rubric) => {
-              const val = rubrics[rubric] || myTimeline[`${rubric}_avg`] || 0;
-              return (
-                <div key={rubric}>
-                  <div className="flex justify-between text-sm items-center">
-                    <span className="font-medium capitalize">{rubric === "hr" ? "Body Language / HR" : rubric}</span>
-                    <span className="font-display text-xl tnum text-accent">{val}</span>
-                  </div>
-                  <div className="mt-1.5">
-                    <Progress value={val} />
-                  </div>
+            <div className="col-span-12 md:col-span-5 p-6">
+              {!session ? (
+                <div>
+                  <div className="font-mono text-[10px] tracking-[0.24em] text-ink-400">SETUP</div>
+                  <Select value={mode} onChange={(e) => setMode(e.target.value)} className="mt-4">
+                    <option value="hr">HR Interview Mode</option>
+                    <option value="technical">Technical Interview Mode</option>
+                    <option value="ai">AI Mock Interview Mode</option>
+                  </Select>
+                  <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Private notes for this interview..." className="mt-4 min-h-[140px] w-full border border-line bg-bone-50 p-3 text-sm" />
+                  <button onClick={startInterview} className="btn mt-4 w-full justify-center py-3 text-xs"><Play size={14} /> Start Interview</button>
                 </div>
-              );
-            })}
+              ) : (
+                <div className="h-full flex flex-col">
+                  <div className="font-mono text-[10px] tracking-[0.24em] text-ink-400">QUESTION {active + 1}/{session.questions.length}</div>
+                  <div className="font-display text-2xl mt-4">{activeQuestion?.prompt}</div>
+                  <textarea value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder="Type or paste your spoken answer transcript here after answering aloud..." className="mt-6 min-h-[220px] w-full border border-line bg-bone-50 p-4 text-sm" />
+                  <div className="mt-4 grid grid-cols-2 gap-3">
+                    <button onClick={saveAnswer} className="btn justify-center py-3 text-xs"><Send size={14} /> Save Answer</button>
+                    <button onClick={completeInterview} className="btn justify-center py-3 text-xs">Complete</button>
+                  </div>
+                  {feedback && (
+                    <div className="mt-6 border border-line bg-bone-50 p-4">
+                      <div className="font-display text-4xl text-accent tnum">{feedback.overall_score}</div>
+                      <div className="text-sm text-ink-500">Pace {feedback.speaking_pace} wpm / {feedback.response_length} words</div>
+                      <div className="mt-3 text-sm font-serif">{feedback.feedback}</div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
-        <div className="col-span-12 md:col-span-6 editorial p-8 bg-paper dash-reveal">
-          <div className="font-mono text-[10px] tracking-[0.24em] text-ink-400">WEAK AREAS</div>
-          {weakAreas.length > 0 ? (
-            <div className="mt-5 space-y-3">
-              {weakAreas.map((area, i) => (
-                <div key={i} className="border border-line bg-bone-50 p-4 flex items-center justify-between">
-                  <div>
-                    <div className="font-display text-lg tracking-tight uppercase">{area.rubric || area.area || area}</div>
-                    <div className="text-xs text-ink-500 font-serif mt-1">Gap to benchmark: {area.gap || 0} points</div>
-                  </div>
-                  <div className="font-display text-3xl text-accent tnum">{area.score || 0}</div>
+        <div className="col-span-12 lg:col-span-4 grid gap-4">
+          <div className="editorial p-6">
+            <div className="font-mono text-[10px] tracking-[0.24em] text-ink-400">FEEDBACK PANEL</div>
+            <div className="mt-4 space-y-3">
+              {["communication_score", "confidence_score", "technical_score", "hr_score"].map((key) => (
+                <div key={key}>
+                  <div className="flex justify-between text-sm"><span className="capitalize">{key.replace("_score", "").replace("_", " ")}</span><span className="font-display text-accent">{feedback?.[key] || 0}</span></div>
+                  <Progress value={feedback?.[key] || 0} />
                 </div>
               ))}
             </div>
-          ) : (
-            <div className="mt-5">
-              <EmptyState title="No weak areas identified" description="Congratulations! Your performance scores are in sync with current hiring standards." />
+          </div>
+          <div className="editorial p-6 bg-bone-50">
+            <div className="font-mono text-[10px] tracking-[0.24em] text-ink-400">WEAK AREA DETECTION</div>
+            <div className="mt-4 space-y-2">
+              {weakAreas.map((area, i) => (
+                <div key={`${area.area}-${i}`} className="border border-line bg-paper p-3 flex justify-between text-sm">
+                  <span>{area.area}</span><Badge variant="warning">gap {area.gap || 0}</Badge>
+                </div>
+              ))}
+              {weakAreas.length === 0 && <div className="text-sm text-ink-400">Complete a mock interview to generate feedback.</div>}
             </div>
-          )}
-        </div>
-      </DashboardReveal>
-
-      {schedule.length > 0 && (
-        <div className="editorial p-8 bg-ink text-bone">
-          <div className="font-mono text-[10px] tracking-[0.24em] text-bone/45 mb-6">UPCOMING INTERVIEWS</div>
-          <div className="bg-paper text-ink p-4 border border-line-strong">
-            <DataTable data={schedule} columns={schedColumns} initialPageSize={3} />
           </div>
         </div>
-      )}
-
-      {reports.length > 0 && (
-        <div className="editorial p-8 bg-paper">
-          <div className="border-b border-line pb-4 mb-6">
-            <div className="font-mono text-[10px] tracking-[0.24em] text-ink-400">INTERVIEW HISTORY</div>
-          </div>
-          <DataTable data={reports} columns={historyColumns} initialPageSize={5} />
-        </div>
-      )}
+      </div>
     </PageTransition>
   );
 }

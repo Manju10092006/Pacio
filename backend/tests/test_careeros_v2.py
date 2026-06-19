@@ -218,6 +218,32 @@ def test_student_dsa_toggle(student_session):
     assert r.json()["solved"] >= arr_before["solved"]
 
 
+def test_student_dsa_coding_workspace(student_session):
+    q = student_session.get(f"{API}/me/dsa/questions")
+    assert q.status_code == 200, q.text
+    question = q.json()["questions"][0]
+    run = student_session.post(f"{API}/me/dsa/submissions/run", json={
+        "question_id": question["question_id"],
+        "language": "python",
+        "code": "def solve():\n    return 1\nprint(solve())",
+        "custom_input": "1",
+    })
+    assert run.status_code == 200, run.text
+    assert "result" in run.json()
+
+    submit = student_session.post(f"{API}/me/dsa/submissions/submit", json={
+        "question_id": question["question_id"],
+        "language": "python",
+        "code": "def solve():\n    return 1\nprint(solve())",
+    })
+    assert submit.status_code == 200, submit.text
+    assert submit.json()["kind"] == "submit"
+
+    attempts = student_session.get(f"{API}/dsa/student/{q.json()['student_id']}/attempts", params={"question_id": question["question_id"]})
+    assert attempts.status_code == 200, attempts.text
+    assert attempts.json()["count"] >= 2
+
+
 def test_student_readiness_engine(student_session):
     r = student_session.get(f"{API}/readiness/me")
     assert r.status_code == 200, r.text
@@ -309,6 +335,40 @@ def test_aptitude_question_tracking_and_analytics(tpo_session, student_session):
     assert "summary" in report
 
 
+def test_student_aptitude_test_engine(student_session):
+    mine = student_session.get(f"{API}/me/aptitude/questions")
+    assert mine.status_code == 200, mine.text
+    assert mine.json()["overall"]["total"] >= 250
+
+    start = student_session.post(f"{API}/me/aptitude/tests/start", json={
+        "mode": "sectional",
+        "section_code": "QUANT",
+        "question_count": 4,
+        "duration_minutes": 5,
+    })
+    assert start.status_code == 200, start.text
+    test = start.json()
+    assert len(test["questions"]) == 4
+    assert "answer_index" not in test["questions"][0]
+
+    answers = {row["question_id"]: 0 for row in test["questions"]}
+    submit = student_session.post(f"{API}/me/aptitude/tests/{test['test_id']}/submit", json={
+        "answers": answers,
+        "elapsed_seconds": 180,
+        "review_later": [test["questions"][0]["question_id"]],
+        "bookmarks": [test["questions"][1]["question_id"]],
+    })
+    assert submit.status_code == 200, submit.text
+    result = submit.json()
+    assert result["total"] == 4
+    assert 0 <= result["score_pct"] <= 100
+    assert isinstance(result["topic_performance"], list)
+
+    attempts = student_session.get(f"{API}/me/aptitude/attempts")
+    assert attempts.status_code == 200, attempts.text
+    assert any(item["test_id"] == test["test_id"] for item in attempts.json()["items"])
+
+
 def test_ats_intelligence(tpo_session):
     r = tpo_session.get(f"{API}/ats/intelligence")
     assert r.status_code == 200
@@ -363,6 +423,31 @@ def test_interview_history_timeline(tpo_session, student_session):
     mine = student_session.get(f"{API}/interviews/history")
     assert mine.status_code == 200, mine.text
     assert isinstance(mine.json()["student_timeline"], list)
+
+
+def test_student_mock_interview_workflow(student_session):
+    questions = student_session.get(f"{API}/me/interviews/mock/questions", params={"mode": "technical"})
+    assert questions.status_code == 200, questions.text
+    assert len(questions.json()["questions"]) >= 5
+
+    start = student_session.post(f"{API}/me/interviews/mock/start", json={"mode": "technical", "camera_enabled": False, "microphone_enabled": False})
+    assert start.status_code == 200, start.text
+    session = start.json()
+    first = session["questions"][0]
+
+    answer = student_session.post(f"{API}/me/interviews/mock/{session['session_id']}/answer", json={
+        "question_id": first["question_id"],
+        "prompt": first["prompt"],
+        "transcript": "I solved DSA problems using hash maps and explained time complexity for a Python API project with database indexing.",
+        "response_seconds": 55,
+    })
+    assert answer.status_code == 200, answer.text
+
+    complete = student_session.post(f"{API}/me/interviews/mock/{session['session_id']}/complete", json={"notes": "test"})
+    assert complete.status_code == 200, complete.text
+    report = complete.json()
+    assert report["overall_score"] >= 0
+    assert "communication_score" in report
 
 
 def test_cross_module_intelligence(tpo_session):

@@ -22,7 +22,6 @@ export default function StudentInterviews() {
   const streamRef = useRef(null);
   const recorderRef = useRef(null);
   const chunksRef = useRef([]);
-  const stopResolverRef = useRef(null);
   const recognitionRef = useRef(null);
 
   const load = () => api.get("/interviews/history").then(({ data }) => setHistory(data)).catch(() => setHistory({ items: [] }));
@@ -68,14 +67,7 @@ export default function StudentInterviews() {
   };
 
   const startInterview = async () => {
-    let mediaReady = false;
-    try {
-      await ensureMedia();
-      mediaReady = true;
-    } catch {
-      toast.error("Camera or microphone permission was not granted. You can still type a transcript.");
-    }
-    const { data } = await api.post("/me/interviews/mock/start", { mode, camera_enabled: mediaReady || cameraOn, microphone_enabled: mediaReady || micOn, notes });
+    const { data } = await api.post("/me/interviews/mock/start", { mode, camera_enabled: cameraOn, microphone_enabled: micOn, notes });
     setSession(data);
     setActive(0);
     setAnswer("");
@@ -88,10 +80,6 @@ export default function StudentInterviews() {
     if (!session || !activeQuestion) return;
     try {
       const stream = await ensureMedia();
-      if (!window.MediaRecorder) {
-        toast.error("This browser does not support MediaRecorder. Transcript mode is still available.");
-        return;
-      }
       chunksRef.current = [];
       const recorder = new MediaRecorder(stream, { mimeType: MediaRecorder.isTypeSupported("video/webm") ? "video/webm" : undefined });
       recorderRef.current = recorder;
@@ -101,14 +89,14 @@ export default function StudentInterviews() {
       recorder.onstop = () => {
         const blob = new Blob(chunksRef.current, { type: recorder.mimeType || "video/webm" });
         const url = URL.createObjectURL(blob);
-        const payload = {
-          url,
-          size: blob.size,
-          recording_id: `browser_rec_${activeQuestion.question_id}_${Date.now()}`,
-        };
-        setRecordings((current) => ({ ...current, [activeQuestion.question_id]: payload }));
-        stopResolverRef.current?.(payload);
-        stopResolverRef.current = null;
+        setRecordings((current) => ({
+          ...current,
+          [activeQuestion.question_id]: {
+            url,
+            size: blob.size,
+            recording_id: `browser_rec_${activeQuestion.question_id}_${Date.now()}`,
+          },
+        }));
       };
       recorder.start();
 
@@ -138,32 +126,22 @@ export default function StudentInterviews() {
   const stopRecording = () => {
     try { recognitionRef.current?.stop?.(); } catch {}
     recognitionRef.current = null;
-    const recorder = recorderRef.current;
-    if (recorder?.state === "recording") {
-      const stopped = new Promise((resolve) => { stopResolverRef.current = resolve; });
-      recorder.stop();
-      recorderRef.current = null;
-      setRecording(false);
-      toast.success("Recording saved for this answer");
-      return stopped;
-    }
+    if (recorderRef.current?.state === "recording") recorderRef.current.stop();
     recorderRef.current = null;
     setRecording(false);
-    return Promise.resolve(null);
+    toast.success("Recording saved for this answer");
   };
 
   const saveAnswer = async () => {
     const question = session?.questions?.[active];
     if (!question) return;
-    let latestRecording = recordings[question.question_id] || null;
-    if (recording) latestRecording = await stopRecording();
     await api.post(`/me/interviews/mock/${session.session_id}/answer`, {
       question_id: question.question_id,
       prompt: question.prompt,
       transcript: answer,
       response_seconds: Math.max(20, seconds),
-      recording_id: latestRecording?.recording_id || recordings[question.question_id]?.recording_id || null,
-      recording_size: latestRecording?.size || recordings[question.question_id]?.size || 0,
+      recording_id: recordings[question.question_id]?.recording_id || null,
+      recording_size: recordings[question.question_id]?.size || 0,
     });
     setAnswer("");
     setActive((index) => Math.min(index + 1, session.questions.length - 1));
@@ -171,6 +149,7 @@ export default function StudentInterviews() {
   };
 
   const completeInterview = async () => {
+    if (recording) stopRecording();
     if (answer.trim()) await saveAnswer();
     const { data } = await api.post(`/me/interviews/mock/${session.session_id}/complete`, { notes, camera_enabled: cameraOn, microphone_enabled: micOn });
     setFeedback(data);
@@ -211,14 +190,9 @@ export default function StudentInterviews() {
                 <div className="font-mono text-[10px] tracking-[0.24em] text-bone/45">INTERVIEW ROOM</div>
                 <div className="font-mono text-xs text-bone/60">{Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, "0")}</div>
               </div>
-              <div className="mt-5 relative flex-1 min-h-[360px] rounded-[8px] border border-bone/10 bg-bone/5 grid place-items-center overflow-hidden">
+              <div className="mt-5 relative flex-1 min-h-[360px] border border-bone/10 bg-bone/5 grid place-items-center overflow-hidden">
                 <video ref={videoRef} autoPlay muted playsInline className={`absolute inset-0 h-full w-full object-cover ${cameraOn ? "opacity-100" : "opacity-0"}`} />
                 {!cameraOn && <div className="text-center text-bone/45"><Camera className="mx-auto mb-3" />Camera preview disabled</div>}
-                {recording && (
-                  <div className="absolute left-4 top-4 rounded-full bg-accent px-3 py-1.5 text-[10px] font-mono uppercase tracking-wider text-bone shadow-[0_10px_30px_rgba(255,59,0,.35)]">
-                    Recording audio/video
-                  </div>
-                )}
               </div>
               <div className="mt-4 grid grid-cols-4 gap-2">
                 <button className="btn justify-center py-2 text-[10px]" onClick={startCamera}><Video size={14} /> Enable</button>
@@ -237,7 +211,7 @@ export default function StudentInterviews() {
                     <option value="ai">AI Mock Interview Mode</option>
                   </Select>
                   <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Private notes for this interview..." className="mt-4 min-h-[140px] w-full border border-line bg-bone-50 p-3 text-sm" />
-                  <button onClick={startInterview} className="btn mt-4 w-full justify-center py-3 text-xs"><Play size={14} /> Start Interview + Enable Media</button>
+                  <button onClick={startInterview} className="btn mt-4 w-full justify-center py-3 text-xs"><Play size={14} /> Start Interview</button>
                 </div>
               ) : (
                 <div className="h-full flex flex-col">
@@ -245,13 +219,13 @@ export default function StudentInterviews() {
                   <div className="font-display text-2xl mt-4">{activeQuestion?.prompt}</div>
                   <div className="mt-5 grid grid-cols-2 gap-3">
                     {!recording ? (
-                      <button onClick={startRecording} className="btn justify-center py-3 text-xs"><Mic size={14} /> Record Answer</button>
+                      <button onClick={startRecording} className="btn justify-center py-3 text-xs"><Mic size={14} /> Start Recording</button>
                     ) : (
                       <button onClick={stopRecording} className="btn justify-center py-3 text-xs bg-accent text-bone"><Square size={14} /> Stop Recording</button>
                     )}
                     <button onClick={saveAnswer} className="btn justify-center py-3 text-xs"><Send size={14} /> Save Answer</button>
                   </div>
-                  <textarea value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder="Transcript appears here while you speak. You can edit it before saving." className="focus-ring mt-4 min-h-[180px] w-full rounded-[8px] border border-line bg-bone-50 p-4 text-sm" />
+                  <textarea value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder="Transcript appears here while you speak. You can edit it before saving." className="mt-4 min-h-[180px] w-full border border-line bg-bone-50 p-4 text-sm" />
                   {recordings[activeQuestion?.question_id]?.url && (
                     <video controls src={recordings[activeQuestion.question_id].url} className="mt-3 w-full border border-line bg-ink" />
                   )}

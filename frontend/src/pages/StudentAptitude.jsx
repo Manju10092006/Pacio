@@ -86,7 +86,6 @@ export default function StudentAptitude() {
         elapsed_seconds: auto ? session.duration_minutes * 60 : elapsed,
       });
       setAnalysis(data);
-      setSession((current) => current ? { ...current, status: "submitted" } : current);
       setRemaining(0);
       await load();
       toast.success(auto ? "Time is up. Test auto-submitted." : "Test submitted");
@@ -132,8 +131,8 @@ export default function StudentAptitude() {
         ))}
       </DashboardReveal>}
 
-      <div className="grid grid-cols-12 gap-4 items-start">
-        <div className={`${session ? "hidden" : "col-span-12 lg:col-span-4"} command-shell p-8 sticky top-20`}>
+      <div className="grid grid-cols-12 gap-4">
+        <div className={`${session ? "hidden" : "col-span-12 lg:col-span-4"} editorial p-8`}>
           <div className="font-mono text-[10px] tracking-[0.24em] text-ink-400">START ASSESSMENT</div>
           <div className="grid grid-cols-2 gap-3 mt-5">
             <label className="text-xs font-mono text-ink-500">MODE
@@ -148,10 +147,10 @@ export default function StudentAptitude() {
               </Select>
             </label>
             <label className="text-xs font-mono text-ink-500">QUESTIONS
-              <input className="focus-ring mt-1 w-full rounded-[8px] border border-line bg-paper px-3 py-2" type="number" min="1" max="60" value={config.question_count} onChange={(e) => setConfig({ ...config, question_count: Number(e.target.value) })} />
+              <input className="mt-1 w-full border border-line bg-bone-50 px-3 py-2" type="number" value={config.question_count} onChange={(e) => setConfig({ ...config, question_count: Number(e.target.value) })} />
             </label>
             <label className="text-xs font-mono text-ink-500">MINUTES
-              <input className="focus-ring mt-1 w-full rounded-[8px] border border-line bg-paper px-3 py-2" type="number" min="1" max="180" value={config.duration_minutes} onChange={(e) => setConfig({ ...config, duration_minutes: Number(e.target.value) })} />
+              <input className="mt-1 w-full border border-line bg-bone-50 px-3 py-2" type="number" value={config.duration_minutes} onChange={(e) => setConfig({ ...config, duration_minutes: Number(e.target.value) })} />
             </label>
           </div>
           <button onClick={startTest} className="btn mt-5 w-full justify-center py-3 text-xs"><Play size={14} /> Start Test</button>
@@ -168,18 +167,18 @@ export default function StudentAptitude() {
           </div>
         </div>
 
-        <div className={`${session ? "col-span-12" : "col-span-12 lg:col-span-8"} command-shell p-0 overflow-hidden`} data-testid="aptitude-test-engine">
+        <div className={`${session ? "col-span-12" : "col-span-12 lg:col-span-8"} editorial p-0 overflow-hidden`} data-testid="aptitude-test-engine">
           {!session ? (
             <div className="p-10 text-center text-ink-400 font-serif">Start a test to open the timed assessment room.</div>
           ) : (
             <div className="grid grid-cols-12 min-h-[620px]">
-              <div className="col-span-12 md:col-span-8 p-8 bg-paper/85">
+              <div className="col-span-12 md:col-span-8 p-8">
                 <div className="flex items-center justify-between border-b border-line pb-4">
                   <div>
                     <div className="font-mono text-[10px] tracking-[0.24em] text-ink-400">{session.mode.toUpperCase()} / Q{active + 1}</div>
                     <div className="font-display text-2xl mt-1">{activeQuestion?.title}</div>
                   </div>
-                  <div className={`flex items-center gap-2 rounded-full border px-3 py-1.5 font-mono text-sm ${analysis ? "border-[var(--signal)] text-[var(--signal)] bg-[var(--signal-soft)]" : "border-line text-ink"}`}><Clock size={15} /> {analysis ? "SUBMITTED" : fmt(remaining)}</div>
+                  <div className={`flex items-center gap-2 font-mono text-sm ${analysis ? "text-accent" : ""}`}><Clock size={15} /> {analysis ? "SUBMITTED" : fmt(remaining)}</div>
                 </div>
                 <div className="mt-8 font-serif text-xl text-ink-700">{activeQuestion?.prompt}</div>
                 <div className="mt-8 space-y-3">
@@ -189,10 +188,9 @@ export default function StudentAptitude() {
                       key={option}
                       disabled={!!analysis}
                       onClick={() => setAnswers((current) => ({ ...current, [activeQuestion.question_id]: index }))}
-                      data-selected={answers[activeQuestion.question_id] === index}
-                      className="option-card w-full px-5 py-4 text-left grid grid-cols-[28px_1fr_auto] items-center gap-3"
+                      className={`w-full border-2 px-5 py-4 text-left transition-colors grid grid-cols-[28px_1fr_auto] items-center gap-3 ${answers[activeQuestion.question_id] === index ? "border-accent bg-accent text-bone shadow-[inset_0_0_0_1px_rgba(255,255,255,.25)]" : "border-line bg-bone-50 hover:border-ink"}`}
                     >
-                      <span className="font-mono text-xs rounded-full border border-current/25 h-7 w-7 grid place-items-center">{String.fromCharCode(65 + index)}</span>
+                      <span className="font-mono text-xs">{String.fromCharCode(65 + index)}</span>
                       <span>{option}</span>
                       {answers[activeQuestion.question_id] === index && <CheckCircle2 size={17} />}
                     </button>
@@ -231,10 +229,10 @@ export default function StudentAptitude() {
                   </div>
                 )}
               </div>
-              <div className="col-span-12 md:col-span-4 bg-bone-100/70 border-l border-line p-6">
+              <div className="col-span-12 md:col-span-4 bg-bone-100/60 border-l border-line p-6">
                 <div className="grid grid-cols-5 gap-2">
                   {session.questions.map((q, index) => (
-                    <button type="button" key={q.question_id} onClick={() => setActive(index)} className={`focus-ring h-10 rounded-[8px] border text-xs font-mono transition-all ${active === index ? "bg-ink text-bone border-ink shadow-[0_10px_24px_rgba(7,16,21,0.18)]" : answers[q.question_id] !== undefined ? "bg-accent text-bone border-accent" : "bg-paper border-line hover:border-ink"}`}>
+                    <button type="button" key={q.question_id} onClick={() => setActive(index)} className={`h-10 border text-xs font-mono ${active === index ? "bg-ink text-bone" : answers[q.question_id] !== undefined ? "bg-accent text-bone border-accent" : "bg-paper border-line"}`}>
                       {index + 1}
                     </button>
                   ))}

@@ -6,17 +6,17 @@ import { api, setAuthToken } from "../lib/api";
 
 function SidebarBody({ label, role, accent, sections, user, onLogout, isMobile, onClose }) {
   return (
-    <div className="h-full w-[288px] command-dark border-r border-white/10 flex flex-col">
-      <div className="p-6 border-b border-white/10 flex items-start justify-between">
+    <div className="h-full w-[280px] bg-bone-50 border-r border-line flex flex-col">
+      <div className="p-6 border-b border-line flex items-start justify-between">
         <Link to="/" className="flex items-center gap-3" data-testid="dash-brand">
-          <div className="w-8 h-8 rounded-[8px] bg-white/10 border border-white/10 grid place-items-center"><div className="w-2 h-2 rounded-full" style={{ background: accent, boxShadow: `0 0 20px ${accent}` }} /></div>
+          <div className="w-7 h-7 bg-ink-900 grid place-items-center"><div className="w-2 h-2" style={{ background: accent }} /></div>
           <div>
-            <div className="font-display font-bold tracking-tight text-[15px] text-bone">CareerOS</div>
-            <div className="font-mono text-[9px] tracking-[0.28em] text-bone/45 uppercase">{label}</div>
+            <div className="font-display font-bold tracking-tight text-[15px]">CareerOS</div>
+            <div className="font-mono text-[9px] tracking-[0.28em] text-ink-400 uppercase">{label}</div>
           </div>
         </Link>
         {isMobile && (
-          <button className="p-1 text-bone/70 hover:text-bone" onClick={onClose} data-testid="drawer-close" aria-label="Close menu">
+          <button className="p-1" onClick={onClose} data-testid="drawer-close" aria-label="Close menu">
             <X size={18} />
           </button>
         )}
@@ -24,18 +24,18 @@ function SidebarBody({ label, role, accent, sections, user, onLogout, isMobile, 
       <div className="flex-1 overflow-y-auto py-4">
         {sections.map((s) => (
           <div key={s.title} className="mb-6">
-            <div className="px-7 pb-2 font-mono text-[10px] tracking-[0.28em] text-bone/35">{s.title}</div>
+            <div className="px-7 pb-2 font-mono text-[10px] tracking-[0.28em] text-ink-400">{s.title}</div>
             <nav className="px-3 space-y-px">
               {s.items.map(({ to, label: ll, icon: Icon, key }) => (
                 <NavLink
                   key={to} to={to} end={key === "command" || key === "overview" || key === "home"}
                   data-testid={`nav-${key}`}
                   className={({ isActive }) =>
-                    `flex items-center gap-3 px-4 py-2.5 text-sm transition-colors rounded-[8px] border border-transparent ${
-                      isActive ? "bg-white/10 text-bone font-medium" : "text-bone/60 hover:text-bone hover:bg-white/5"
+                    `flex items-center gap-3 px-4 py-2.5 text-sm transition-colors border-l-2 ${
+                      isActive ? "border-l-[3px] bg-bone-100 text-ink-900 font-medium" : "border-transparent text-ink-500 hover:text-ink-900 hover:bg-bone-100"
                     }`
                   }
-                  style={({ isActive }) => isActive ? { borderColor: `${accent}55`, boxShadow: `inset 3px 0 0 ${accent}` } : {}}
+                  style={({ isActive }) => isActive ? { borderColor: accent } : {}}
                 >
                   <Icon size={16} />
                   <span>{ll}</span>
@@ -45,16 +45,16 @@ function SidebarBody({ label, role, accent, sections, user, onLogout, isMobile, 
           </div>
         ))}
       </div>
-      <div className="p-5 border-t border-white/10">
+      <div className="p-5 border-t border-line">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-[8px] grid place-items-center font-display font-bold text-bone-50" style={{ background: accent }}>
+          <div className="w-9 h-9 grid place-items-center font-display font-bold text-bone-50" style={{ background: accent }}>
             {(user?.name || "?").charAt(0)}
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-sm font-medium truncate text-bone" data-testid="user-name">{user?.name}</div>
-            <div className="font-mono text-[10px] tracking-[0.16em] text-bone/40 uppercase">{role.replace("_", " ")}</div>
+            <div className="text-sm font-medium truncate" data-testid="user-name">{user?.name}</div>
+            <div className="font-mono text-[10px] tracking-[0.16em] text-ink-400 uppercase">{role.replace("_", " ")}</div>
           </div>
-          <button onClick={onLogout} data-testid="logout-btn" title="Sign out" className="text-bone/40 hover:text-accent transition-colors">
+          <button onClick={onLogout} data-testid="logout-btn" title="Sign out" className="text-ink-400 hover:text-accent transition-colors">
             <LogOut size={16} />
           </button>
         </div>
@@ -85,7 +85,7 @@ export default function RoleLayout({ label, role, accent, sections }) {
   const shared = { label, role, accent, sections, user, onLogout: logout };
 
   return (
-    <div className="min-h-screen text-ink-900 flex">
+    <div className="min-h-screen bg-bone-100 text-ink-900 flex">
       <aside className="hidden lg:flex shrink-0">
         <SidebarBody {...shared} isMobile={false} />
       </aside>
@@ -100,7 +100,7 @@ export default function RoleLayout({ label, role, accent, sections }) {
       )}
 
       <main className="flex-1 min-w-0 relative">
-        <header className="h-14 border-b border-line flex items-center justify-between px-4 lg:px-8 sticky top-0 z-30 glass">
+        <header className="h-12 border-b border-line bg-bone-50 flex items-center justify-between px-4 lg:px-8 sticky top-0 z-30 glass">
           <div className="flex items-center gap-3">
             <button className="lg:hidden p-1.5 -ml-1 hover:bg-bone-200 transition-colors" onClick={() => setOpen(true)} data-testid="mobile-menu-btn" aria-label="Open menu">
               <Menu size={18} />
@@ -119,7 +119,7 @@ export default function RoleLayout({ label, role, accent, sections }) {
           </div>
         </header>
 
-        <div className="p-4 sm:p-6 lg:p-8 xl:p-10">
+        <div className="p-4 sm:p-6 lg:p-10">
           <Outlet />
         </div>
       </main>

@@ -103,7 +103,7 @@ export function DataTable({
   return (
     <div className="space-y-4">
       {/* Table Actions Bar */}
-      <div className="command-shell flex flex-wrap items-center justify-between gap-3 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-bone-100 p-4 border border-line-strong">
         <div className="flex items-center gap-3 flex-1 min-w-[240px]">
           {searchKey && (
             <Input
@@ -165,7 +165,7 @@ export function DataTable({
               <EyeOff size={14} className="mr-1" /> Columns
             </Button>
             {showColMenu && (
-              <div className="absolute right-0 mt-2 w-52 command-shell p-3 z-20 space-y-2 font-mono text-[10px]">
+              <div className="absolute right-0 mt-2 w-48 border border-line-strong bg-bone p-3 shadow-xl z-20 space-y-2 font-mono text-[10px]">
                 <div className="font-semibold text-ink/40 tracking-wider pb-1.5 border-b border-line">SHOW/HIDE</div>
                 {columns.map(col => {
                   const isVisible = visibleColumns.has(col.key);
@@ -196,10 +196,10 @@ export function DataTable({
       </div>
 
       {/* Main Table */}
-      <div className="premium-table overflow-x-auto">
+      <div className="border border-line-strong bg-paper overflow-x-auto">
         <table className="w-full text-left border-collapse">
           <thead>
-            <tr className="border-b border-line-strong font-mono text-[10px] text-ink/65 tracking-wider uppercase select-none">
+            <tr className="border-b border-line-strong bg-bone-100/55 font-mono text-[10px] text-ink/65 tracking-wider uppercase select-none">
               {bulkActions.length > 0 && (
                 <th className="p-4 w-12 text-center border-r border-line">
                   <button onClick={toggleSelectAll} className="hover:text-accent">
@@ -215,7 +215,7 @@ export function DataTable({
                     onClick={() => handleSort(col.key, col.sortable)}
                     className={cn(
                       "p-4 font-semibold border-r border-line last:border-r-0",
-                      col.sortable && "cursor-pointer hover:bg-[var(--signal-soft)] hover:text-ink"
+                      col.sortable && "cursor-pointer hover:bg-bone-200 hover:text-ink"
                     )}
                   >
                     <div className="flex items-center gap-1">
@@ -245,7 +245,7 @@ export function DataTable({
                     key={rowId}
                     onClick={() => onRowClick && onRowClick(row)}
                     className={cn(
-                      "hover:bg-[rgba(0,167,167,0.045)] transition-colors border-b border-line last:border-b-0",
+                      "hover:bg-bone-50 transition-colors border-b border-line last:border-b-0",
                       isSelected && "bg-accent/[0.03]",
                       onRowClick && "cursor-pointer"
                     )}
@@ -270,10 +270,10 @@ export function DataTable({
                     {rowActions.length > 0 && (
                       <td className="p-4 text-center" onClick={e => e.stopPropagation()}>
                         <div className="relative inline-block group">
-                          <button className="p-1.5 hover:bg-bone-200 rounded-[6px] border border-transparent hover:border-line-strong transition-all">
+                          <button className="p-1.5 hover:bg-bone-200 rounded border border-transparent hover:border-line-strong transition-all">
                             <MoreHorizontal size={14} />
                           </button>
-                          <div className="hidden group-hover:block absolute right-0 bottom-full mb-1 w-36 command-dark text-bone border border-white/10 shadow-lg z-20 py-1 font-mono text-[10px] rounded-[8px] overflow-hidden">
+                          <div className="hidden group-hover:block absolute right-0 bottom-full mb-1 w-32 bg-ink text-bone border border-ink shadow-lg z-20 py-1 font-mono text-[10px]">
                             {rowActions.map(act => (
                               <button
                                 key={act.label}
@@ -296,7 +296,7 @@ export function DataTable({
       </div>
 
       {/* Pagination Bar */}
-      <div className="command-shell flex items-center justify-between font-mono text-xs text-ink/60 p-4">
+      <div className="flex items-center justify-between font-mono text-xs text-ink/60 p-4 border border-line-strong bg-bone-100">
         <div>
           SHOWING {Math.min(processedData.length, (currentPage - 1) * pageSize + 1)}-
           {Math.min(processedData.length, currentPage * pageSize)} OF {processedData.length} ROWS

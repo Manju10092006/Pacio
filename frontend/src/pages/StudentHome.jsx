@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { useAuth } from "../App";
-import { Code2, TrendingUp, Award, Briefcase, ChevronRight, User } from "lucide-react";
+import { Code2, TrendingUp, Award, Briefcase, ChevronRight } from "lucide-react";
 import { Link } from "react-router-dom";
-import { Avatar, Badge, Progress, EmptyState } from "../components/Primitives";
-import { PageTransition, DashboardReveal, CounterAnimation, RevealText } from "../components/Motion";
+import { Badge, Progress, EmptyState } from "../components/Primitives";
+import { PageTransition, DashboardReveal, CounterAnimation } from "../components/Motion";
 
 export default function StudentHome() {
   useAuth();

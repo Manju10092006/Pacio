@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../lib/api";
-import { Badge, Progress, Button, EmptyState } from "../components/Primitives";
+import { Badge, Progress, EmptyState } from "../components/Primitives";
 import { PageTransition, CounterAnimation, DashboardReveal } from "../components/Motion";
 import { DataTable } from "../components/DataTable";
 

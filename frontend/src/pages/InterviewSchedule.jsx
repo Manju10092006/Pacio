@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { toast } from "sonner";
-import { CalendarPlus, Clock, MapPin, X, Trash2 } from "lucide-react";
+import { CalendarPlus, Clock, MapPin, Trash2 } from "lucide-react";
 import { useAuth } from "../App";
 import { Button, Input, Select, Badge, DialogRoot, DialogContent, TabsRoot, TabsList, TabsTrigger, TabsContent } from "../components/Primitives";
-import { PageTransition, DashboardReveal } from "../components/Motion";
+import { PageTransition } from "../components/Motion";
 import { Calendar } from "../components/Calendar";
 
 const TYPES = ["Technical", "HR", "System Design", "Behavioral", "Final"];

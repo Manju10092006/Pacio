@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { useAuth } from "../App";
 import { toast } from "sonner";
-import { Badge, Progress, Button, EmptyState, TabsRoot, TabsList, TabsTrigger, TabsContent } from "../components/Primitives";
+import { Badge, EmptyState, TabsRoot, TabsList, TabsTrigger, TabsContent } from "../components/Primitives";
 import { PageTransition, CounterAnimation, DashboardReveal } from "../components/Motion";
 import { Kanban } from "../components/Kanban";
 import { DataTable } from "../components/DataTable";

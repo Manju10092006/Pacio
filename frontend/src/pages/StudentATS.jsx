@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { api } from "../lib/api";
 import { toast } from "sonner";
-import { Badge, Progress, Button, Select, EmptyState } from "../components/Primitives";
+import { Badge, Progress, Select, EmptyState } from "../components/Primitives";
 import { PageTransition, CounterAnimation, DashboardReveal } from "../components/Motion";
 import { DataTable } from "../components/DataTable";
 

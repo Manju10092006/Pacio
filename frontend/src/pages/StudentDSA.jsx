@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../lib/api";
-import { CheckCircle2, Circle, Plus, Minus, ArrowRight, BookOpen } from "lucide-react";
+import { CheckCircle2, Circle, Plus, Minus } from "lucide-react";
 import { Button, Input, Textarea, Select, Badge, Progress, SheetRoot, SheetContent } from "../components/Primitives";
 import { PageTransition, DashboardReveal, CounterAnimation } from "../components/Motion";
 

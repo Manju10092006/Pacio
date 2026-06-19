@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { ChevronDown, ChevronUp, ChevronLeft, ChevronRight, EyeOff, CheckSquare, Square, MoreHorizontal } from "lucide-react";
-import { Button, Input, Select, Badge, cn } from "./Primitives";
+import { Button, Input, Select, cn } from "./Primitives";
 
 export function DataTable({
   data = [],

@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
-import { ArrowUpRight, ArrowRight, CheckCircle2, ChevronRight, HelpCircle, Layers, Activity, Users, ShieldAlert, Code2, Briefcase, Database } from "lucide-react";
+import { ArrowUpRight, ArrowRight, ChevronRight, Activity, Users, Briefcase, Database } from "lucide-react";
 import { api } from "../lib/api";
 import { Badge } from "../components/Primitives";
 

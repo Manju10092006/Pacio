@@ -1,6 +1,6 @@
 import React from "react";
-import { ArrowRight, User, Briefcase, Calendar } from "lucide-react";
-import { Badge, cn } from "./Primitives";
+import { ArrowRight, Briefcase, Calendar } from "lucide-react";
+import { Badge } from "./Primitives";
 
 export function Kanban({
   items = [],

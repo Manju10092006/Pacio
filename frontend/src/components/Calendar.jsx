@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Clock, Video, User } from "lucide-react";
+import { ChevronLeft, ChevronRight, Clock, Video, User } from "lucide-react";
 import { Button, cn } from "./Primitives";
 
 export function Calendar({ events = [], onEventClick }) {

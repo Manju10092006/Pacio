@@ -17,10 +17,10 @@ export const Button = React.forwardRef(({ className, variant = "default", ...pro
     <button
       ref={ref}
       className={cn(
-        "inline-flex items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-medium tracking-[-0.009em] border border-ink bg-ink text-bone shadow-[0_14px_30px_-20px_rgba(23,25,28,0.55)] hover:bg-accent hover:border-accent transition-all duration-200 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none",
-        variant === "ghost" && "bg-transparent text-ink border-line-strong shadow-none hover:bg-ink hover:text-bone hover:border-ink",
+        "inline-flex items-center justify-center gap-2 px-5 py-3 text-xs font-mono tracking-wider uppercase border border-ink bg-ink text-bone hover:bg-accent hover:border-accent transition-all duration-200 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none",
+        variant === "ghost" && "bg-transparent text-ink border-line-strong hover:bg-ink hover:text-bone hover:border-ink",
         variant === "accent" && "bg-accent border-accent text-bone hover:bg-ink hover:border-ink",
-        variant === "outline" && "bg-white/75 border-line-strong text-ink shadow-none hover:border-ink hover:bg-white",
+        variant === "outline" && "bg-transparent border-line-strong text-ink hover:border-ink hover:bg-bone-200",
         className
       )}
       {...props}
@@ -35,7 +35,7 @@ export const Input = React.forwardRef(({ className, ...props }, ref) => {
     <input
       ref={ref}
       className={cn(
-        "w-full rounded-2xl bg-white/85 border border-line-strong px-4 py-3 text-sm font-sans placeholder-ink/40 shadow-[0_1px_0_rgba(23,25,28,0.03)] focus:outline-none focus:border-ink focus:ring-4 focus:ring-ink/[0.06] transition-all",
+        "w-full bg-paper border border-line-strong px-4 py-3 text-sm font-sans placeholder-ink/40 focus:outline-none focus:border-ink focus:ring-1 focus:ring-ink transition-all",
         className
       )}
       {...props}
@@ -50,7 +50,7 @@ export const Textarea = React.forwardRef(({ className, ...props }, ref) => {
     <textarea
       ref={ref}
       className={cn(
-        "w-full rounded-2xl bg-white/85 border border-line-strong px-4 py-3 text-sm font-sans placeholder-ink/40 shadow-[0_1px_0_rgba(23,25,28,0.03)] focus:outline-none focus:border-ink focus:ring-4 focus:ring-ink/[0.06] transition-all min-h-[100px]",
+        "w-full bg-paper border border-line-strong px-4 py-3 text-sm font-sans placeholder-ink/40 focus:outline-none focus:border-ink focus:ring-1 focus:ring-ink transition-all min-h-[100px]",
         className
       )}
       {...props}
@@ -66,7 +66,7 @@ export const Select = React.forwardRef(({ className, children, ...props }, ref) 
       <select
         ref={ref}
         className={cn(
-          "w-full rounded-2xl bg-white/85 border border-line-strong px-4 py-3 text-sm font-sans focus:outline-none focus:border-ink focus:ring-4 focus:ring-ink/[0.06] transition-all appearance-none pr-10 cursor-pointer",
+          "w-full bg-paper border border-line-strong px-4 py-3 text-sm font-sans focus:outline-none focus:border-ink focus:ring-1 focus:ring-ink transition-all appearance-none pr-10 cursor-pointer",
           className
         )}
         {...props}
@@ -88,10 +88,9 @@ export function Badge({ className, variant = "default", children, ...props }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium border border-line-strong bg-bone-200 text-ink",
+        "inline-flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-mono tracking-wider uppercase border border-line-strong bg-bone-200 text-ink",
         variant === "solid" && "bg-ink text-bone border-ink",
         variant === "accent" && "bg-accent text-bone border-accent",
-        variant === "outline" && "bg-white/75 text-ink border-line-strong",
         variant === "success" && "bg-moss/10 text-moss border-moss/30",
         variant === "warning" && "bg-ochre/10 text-ochre border-ochre/30",
         variant === "danger" && "bg-rust/10 text-rust border-rust/30",
@@ -110,7 +109,7 @@ export function Avatar({ className, name = "U", src, ...props }) {
   return (
     <div
       className={cn(
-        "relative flex h-9 w-9 shrink-0 overflow-hidden rounded-full border border-white bg-accent-soft font-sans text-xs font-semibold items-center justify-center text-accent shadow-sm select-none",
+        "relative flex h-9 w-9 shrink-0 overflow-hidden border border-line-strong bg-bone-200 font-mono text-xs font-semibold items-center justify-center text-ink select-none",
         className
       )}
       {...props}
@@ -128,12 +127,12 @@ export function Avatar({ className, name = "U", src, ...props }) {
 export function Progress({ className, value = 0, ...props }) {
   return (
     <ProgressPrimitive.Root
-      className={cn("relative h-2 w-full overflow-hidden rounded-full bg-bone-200", className)}
+      className={cn("relative h-2 w-full overflow-hidden bg-bone-200 border border-line", className)}
       value={value}
       {...props}
     >
       <ProgressPrimitive.Indicator
-        className="h-full w-full flex-1 bg-gradient-to-r from-accent to-rust transition-all duration-300"
+        className="h-full w-full flex-1 bg-accent transition-all duration-300"
         style={{ transform: `translateX(-${100 - (value || 0)}%)` }}
       />
     </ProgressPrimitive.Root>
@@ -151,7 +150,7 @@ export function TooltipComponent({ content, children }) {
       <Tooltip.Trigger asChild>{children}</Tooltip.Trigger>
       <Tooltip.Portal>
         <Tooltip.Content
-          className="z-50 overflow-hidden rounded-xl bg-ink text-bone px-3 py-1.5 text-xs font-medium border border-ink shadow-md"
+          className="z-50 overflow-hidden bg-ink text-bone px-3 py-1.5 text-xs font-mono border border-ink shadow-md"
           sideOffset={5}
         >
           {content}
@@ -173,14 +172,14 @@ export function DialogContent({ children, title, className, ...props }) {
       <Dialog.Overlay className="fixed inset-0 z-50 bg-ink/40 backdrop-blur-sm" />
       <Dialog.Content
         className={cn(
-          "fixed left-[50%] top-[50%] z-50 grid w-[calc(100%-24px)] max-w-lg translate-x-[-50%] translate-y-[-50%] rounded-[28px] border border-line-strong bg-white/94 p-8 shadow-[0_30px_90px_-45px_rgba(23,25,28,0.65)] backdrop-blur-xl",
+          "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] border border-line-strong bg-bone p-8 shadow-lg",
           className
         )}
         {...props}
       >
         <div className="flex items-center justify-between border-b border-line pb-4 mb-6">
-          {title && <Dialog.Title className="font-display text-2xl tracking-tight">{title}</Dialog.Title>}
-          <Dialog.Close className="grid h-9 w-9 place-items-center rounded-full bg-bone-100 hover:bg-bone-200 transition-colors">
+          {title && <Dialog.Title className="font-display text-xl tracking-tight uppercase">{title}</Dialog.Title>}
+          <Dialog.Close className="hover:opacity-70 transition-opacity">
             <X size={18} />
           </Dialog.Close>
         </div>
@@ -201,14 +200,14 @@ export function SheetContent({ children, title, className, ...props }) {
       <Dialog.Overlay className="fixed inset-0 z-50 bg-ink/40 backdrop-blur-sm" />
       <Dialog.Content
         className={cn(
-          "fixed inset-y-3 right-3 z-50 h-[calc(100%-24px)] w-[calc(100%-24px)] max-w-md rounded-[28px] border border-line-strong bg-white/94 p-8 shadow-[0_30px_90px_-45px_rgba(23,25,28,0.65)] backdrop-blur-xl",
+          "fixed inset-y-0 right-0 z-50 h-full w-full max-w-md border-l border-line-strong bg-bone p-8 shadow-lg",
           className
         )}
         {...props}
       >
         <div className="flex items-center justify-between border-b border-line pb-4 mb-6">
-          {title && <Dialog.Title className="font-display text-2xl tracking-tight">{title}</Dialog.Title>}
-          <Dialog.Close className="grid h-9 w-9 place-items-center rounded-full bg-bone-100 hover:bg-bone-200 transition-colors">
+          {title && <Dialog.Title className="font-display text-xl tracking-tight uppercase">{title}</Dialog.Title>}
+          <Dialog.Close className="hover:opacity-70 transition-opacity">
             <X size={18} />
           </Dialog.Close>
         </div>
@@ -231,15 +230,15 @@ export function DrawerContent({ children, title, className, ...props }) {
       <Dialog.Overlay className="fixed inset-0 z-50 bg-ink/40 backdrop-blur-sm" />
       <Dialog.Content
         className={cn(
-          "fixed inset-x-3 bottom-3 z-50 max-h-[90vh] rounded-[28px] border border-line-strong bg-white/94 p-8 shadow-[0_30px_90px_-45px_rgba(23,25,28,0.65)] backdrop-blur-xl",
+          "fixed inset-x-0 bottom-0 z-50 max-h-[90vh] border-t border-line-strong bg-bone p-8 shadow-lg",
           className
         )}
         {...props}
       >
         <div className="mx-auto h-1.5 w-[40px] rounded-full bg-line-strong mb-6" />
         <div className="flex items-center justify-between border-b border-line pb-4 mb-6">
-          {title && <Dialog.Title className="font-display text-2xl tracking-tight">{title}</Dialog.Title>}
-          <Dialog.Close className="grid h-9 w-9 place-items-center rounded-full bg-bone-100 hover:bg-bone-200 transition-colors">
+          {title && <Dialog.Title className="font-display text-xl tracking-tight uppercase">{title}</Dialog.Title>}
+          <Dialog.Close className="hover:opacity-70 transition-opacity">
             <X size={18} />
           </Dialog.Close>
         </div>
@@ -264,7 +263,7 @@ export function CommandPalette({ open, onOpenChange, items = [], onSelect }) {
     <DialogRoot open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-ink/40 backdrop-blur-sm" />
-        <Dialog.Content className="fixed left-[50%] top-[40%] z-50 w-[calc(100%-24px)] max-w-xl translate-x-[-50%] translate-y-[-50%] rounded-[28px] border border-line-strong bg-white/94 shadow-2xl overflow-hidden backdrop-blur-xl">
+        <Dialog.Content className="fixed left-[50%] top-[40%] z-50 w-full max-w-xl translate-x-[-50%] translate-y-[-50%] border border-line-strong bg-bone shadow-2xl overflow-hidden">
           <div className="flex items-center border-b border-line px-4 py-3 gap-3">
             <Search size={18} className="text-ink/50" />
             <input
@@ -284,7 +283,7 @@ export function CommandPalette({ open, onOpenChange, items = [], onSelect }) {
               filtered.map((item, i) => (
                 <button
                   key={i}
-                  className="w-full rounded-2xl text-left px-3 py-2 hover:bg-ink hover:text-bone text-sm flex items-center justify-between font-medium transition-colors"
+                  className="w-full text-left px-3 py-2 hover:bg-ink hover:text-bone text-sm flex items-center justify-between font-mono transition-colors"
                   onClick={() => {
                     onSelect(item);
                     onOpenChange(false);
@@ -306,9 +305,9 @@ export function CommandPalette({ open, onOpenChange, items = [], onSelect }) {
 // 13. Empty State
 export function EmptyState({ title = "No records found", description = "Try adjusting your filters or search terms.", action }) {
   return (
-    <div className="rounded-[28px] border border-dashed border-line-strong p-12 text-center flex flex-col items-center justify-center bg-white/72">
-      <div className="text-xs font-medium text-ink-400">Static state</div>
-      <h4 className="font-display text-2xl tracking-tight mt-3">{title}</h4>
+    <div className="border border-dashed border-line-strong p-12 text-center flex flex-col items-center justify-center bg-bone-50">
+      <div className="font-mono text-xs text-ink-400 tracking-widest uppercase">§ STATIC STATE</div>
+      <h4 className="font-display text-xl tracking-tight mt-3">{title}</h4>
       <p className="font-serif text-sm text-ink-500 mt-2 max-w-sm">{description}</p>
       {action && <div className="mt-5">{action}</div>}
     </div>
@@ -319,7 +318,7 @@ export function EmptyState({ title = "No records found", description = "Try adju
 export function Skeleton({ className, ...props }) {
   return (
     <div
-      className={cn("animate-pulse rounded-2xl bg-bone-300/80", className)}
+      className={cn("animate-pulse bg-bone-300/80 border border-line", className)}
       {...props}
     />
   );
@@ -332,7 +331,7 @@ export function TabsRoot({ defaultValue, children, className, ...props }) {
 
 export function TabsList({ children, className }) {
   return (
-    <Tabs.List className={cn("inline-flex rounded-full border border-line bg-white/72 p-1 gap-1 overflow-x-auto", className)}>
+    <Tabs.List className={cn("flex border-b border-line gap-2 overflow-x-auto", className)}>
       {children}
     </Tabs.List>
   );
@@ -343,7 +342,7 @@ export function TabsTrigger({ value, children, className }) {
     <Tabs.Trigger
       value={value}
       className={cn(
-        "rounded-full px-4 py-2.5 text-sm font-medium text-ink/60 hover:text-ink transition-all data-[state=active]:bg-ink data-[state=active]:text-bone",
+        "px-4 py-2.5 text-xs font-mono uppercase tracking-wider border-b-2 border-transparent text-ink/60 hover:text-ink transition-all data-[state=active]:border-accent data-[state=active]:text-ink",
         className
       )}
     >

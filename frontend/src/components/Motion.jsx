@@ -16,8 +16,8 @@ export function PageTransition({ children, className }) {
   useEffect(() => {
     gsap.fromTo(
       ref.current,
-      { opacity: 0, y: 18, filter: "blur(8px)" },
-      { opacity: 1, y: 0, filter: "blur(0px)", duration: 0.72, ease: "power3.out" }
+      { opacity: 0, y: 15 },
+      { opacity: 1, y: 0, duration: 0.6, ease: "power2.out" }
     );
   }, []);
   return <div ref={ref} className={cn("w-full", className)}>{children}</div>;
@@ -263,28 +263,19 @@ export function DashboardReveal({ children, className }) {
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const items = el.querySelectorAll(".dash-reveal, .editorial, .dashboard-card");
+    const items = el.querySelectorAll(".dash-reveal");
     gsap.fromTo(
       items,
-      { opacity: 0, scale: 0.975, y: 22, filter: "blur(8px)" },
+      { opacity: 0, scale: 0.96, y: 15 },
       {
         opacity: 1,
         scale: 1,
         y: 0,
-        filter: "blur(0px)",
-        duration: 0.72,
-        stagger: 0.075,
+        duration: 0.6,
+        stagger: 0.1,
         ease: "power3.out",
-        scrollTrigger: {
-          trigger: el,
-          start: "top 92%",
-          toggleActions: "play none none none",
-        },
       }
     );
-    return () => ScrollTrigger.getAll().forEach(trigger => {
-      if (trigger.trigger === el) trigger.kill();
-    });
   }, []);
 
   return (

@@ -69,13 +69,16 @@ export default function StudentDSAProblem() {
 
   return (
     <div className="min-h-screen bg-bone text-ink">
-      <div className="border-b border-line bg-paper px-6 py-4 flex items-center justify-between">
-        <Link to="/student/dsa" className="btn px-4 py-2 text-xs"><ChevronLeft size={14} /> Back to sheet</Link>
-        <div className="font-mono text-xs text-ink-400">{index + 1} / {payload.total}</div>
+      <div className="border-b border-line glass px-6 py-4 flex items-center justify-between sticky top-0 z-20">
+        <Link to="/student/dsa" className="btn px-4 py-2 text-xs"><ChevronLeft size={14} /> Back to A2Z sheet</Link>
+        <div className="font-mono text-xs text-ink-400 flex items-center gap-3">
+          <span className="status-dot" />
+          <span>Problem {index + 1} / {payload.total}</span>
+        </div>
       </div>
 
-      <div className="grid grid-cols-12 min-h-[calc(100vh-65px)]">
-        <aside className="col-span-12 lg:col-span-3 border-r border-line bg-paper p-6 overflow-y-auto">
+      <div className="split-workspace min-h-[calc(100vh-65px)]">
+        <aside className="border-r border-line bg-paper/90 p-6 overflow-y-auto">
           <div className="font-mono text-[10px] tracking-[0.24em] text-ink-400">{question.topic_code}</div>
           <h1 className="font-display text-4xl tracking-tight mt-3">{question.title}</h1>
           <div className="mt-4 flex flex-wrap gap-2">
@@ -93,11 +96,11 @@ export default function StudentDSAProblem() {
             <button disabled={!prev} onClick={() => navigate(`/student/dsa/${prev.question_id}`)} className="btn justify-center py-2 text-xs"><ChevronLeft size={14} /> Prev</button>
             <button disabled={!next} onClick={() => navigate(`/student/dsa/${next.question_id}`)} className="btn justify-center py-2 text-xs">Next <ChevronRight size={14} /></button>
           </div>
-          <div className="mt-8">
+          <div className="mt-8 command-shell p-4">
             <div className="font-mono text-[10px] tracking-[0.24em] text-ink-400">SUBMISSION HISTORY</div>
             <div className="mt-3 space-y-2">
               {attempts.slice(0, 8).map((attempt) => (
-                <div key={attempt.submission_id || attempt.attempt_id} className="border border-line bg-bone-50 p-3 text-xs">
+                <div key={attempt.submission_id || attempt.attempt_id} className="metric-tile p-3 text-xs">
                   <div className="flex justify-between">
                     <span className="font-medium">{attempt.status}</span>
                     <span className="font-mono text-ink-400">{attempt.language}</span>
@@ -110,8 +113,8 @@ export default function StudentDSAProblem() {
           </div>
         </aside>
 
-        <main className="col-span-12 lg:col-span-9 grid grid-rows-[auto_1fr_auto] min-h-[calc(100vh-65px)]">
-          <div className="border-b border-line bg-bone-50 p-5">
+        <main className="grid grid-rows-[auto_minmax(520px,1fr)] min-h-[calc(100vh-65px)]">
+          <div className="border-b border-line bg-bone-50/75 p-5">
             <div className="font-mono text-[10px] tracking-[0.24em] text-ink-400">PROBLEM STATEMENT</div>
             <p className="font-serif text-lg text-ink-600 mt-2">
               Solve {question.title}. Write a complete solution, run it against custom input, then submit to update your placement readiness.
@@ -146,7 +149,7 @@ export default function StudentDSAProblem() {
                 <Button disabled={running} onClick={() => execute("run")}><Play size={14} /> Run</Button>
                 <Button disabled={running} onClick={() => execute("submit")}><Send size={14} /> Submit</Button>
               </div>
-              <div className="mt-6 border border-line bg-bone-50 p-4 flex-1">
+              <div className="mt-6 command-shell p-4 flex-1">
                 <div className="font-mono text-[10px] tracking-[0.24em] text-ink-400">RESULT</div>
                 {result ? (
                   <div className="mt-4 space-y-3 text-sm">

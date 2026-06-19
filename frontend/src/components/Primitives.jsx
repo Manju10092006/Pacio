@@ -17,10 +17,10 @@ export const Button = React.forwardRef(({ className, variant = "default", ...pro
     <button
       ref={ref}
       className={cn(
-        "inline-flex items-center justify-center gap-2 px-5 py-3 text-xs font-mono tracking-wider uppercase border border-ink bg-ink text-bone hover:bg-accent hover:border-accent transition-all duration-200 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none",
-        variant === "ghost" && "bg-transparent text-ink border-line-strong hover:bg-ink hover:text-bone hover:border-ink",
+        "focus-ring inline-flex items-center justify-center gap-2 rounded-[8px] px-5 py-3 text-xs font-mono tracking-wider uppercase border border-ink bg-ink text-bone shadow-[0_10px_24px_rgba(7,16,21,0.14)] hover:bg-accent hover:border-accent transition-all duration-200 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none",
+        variant === "ghost" && "bg-transparent text-ink border-line-strong shadow-none hover:bg-ink hover:text-bone hover:border-ink",
         variant === "accent" && "bg-accent border-accent text-bone hover:bg-ink hover:border-ink",
-        variant === "outline" && "bg-transparent border-line-strong text-ink hover:border-ink hover:bg-bone-200",
+        variant === "outline" && "bg-paper border-line-strong text-ink shadow-none hover:border-ink hover:bg-bone-200",
         className
       )}
       {...props}
@@ -35,7 +35,7 @@ export const Input = React.forwardRef(({ className, ...props }, ref) => {
     <input
       ref={ref}
       className={cn(
-        "w-full bg-paper border border-line-strong px-4 py-3 text-sm font-sans placeholder-ink/40 focus:outline-none focus:border-ink focus:ring-1 focus:ring-ink transition-all",
+        "focus-ring w-full rounded-[8px] bg-paper border border-line-strong px-4 py-3 text-sm font-sans placeholder-ink/40 focus:outline-none focus:border-ink transition-all disabled:opacity-60",
         className
       )}
       {...props}
@@ -50,7 +50,7 @@ export const Textarea = React.forwardRef(({ className, ...props }, ref) => {
     <textarea
       ref={ref}
       className={cn(
-        "w-full bg-paper border border-line-strong px-4 py-3 text-sm font-sans placeholder-ink/40 focus:outline-none focus:border-ink focus:ring-1 focus:ring-ink transition-all min-h-[100px]",
+        "focus-ring w-full rounded-[8px] bg-paper border border-line-strong px-4 py-3 text-sm font-sans placeholder-ink/40 focus:outline-none focus:border-ink transition-all min-h-[100px] disabled:opacity-60",
         className
       )}
       {...props}
@@ -66,7 +66,7 @@ export const Select = React.forwardRef(({ className, children, ...props }, ref) 
       <select
         ref={ref}
         className={cn(
-          "w-full bg-paper border border-line-strong px-4 py-3 text-sm font-sans focus:outline-none focus:border-ink focus:ring-1 focus:ring-ink transition-all appearance-none pr-10 cursor-pointer",
+          "focus-ring w-full rounded-[8px] bg-paper border border-line-strong px-4 py-3 text-sm font-sans focus:outline-none focus:border-ink transition-all appearance-none pr-10 cursor-pointer disabled:cursor-not-allowed disabled:bg-bone-200 disabled:text-ink/45",
           className
         )}
         {...props}
@@ -91,6 +91,8 @@ export function Badge({ className, variant = "default", children, ...props }) {
         "inline-flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-mono tracking-wider uppercase border border-line-strong bg-bone-200 text-ink",
         variant === "solid" && "bg-ink text-bone border-ink",
         variant === "accent" && "bg-accent text-bone border-accent",
+        variant === "signal" && "bg-[var(--signal-soft)] text-[var(--signal)] border-[rgba(0,167,167,0.32)]",
+        variant === "violet" && "bg-[var(--violet-soft)] text-[var(--violet)] border-[rgba(92,92,255,0.32)]",
         variant === "success" && "bg-moss/10 text-moss border-moss/30",
         variant === "warning" && "bg-ochre/10 text-ochre border-ochre/30",
         variant === "danger" && "bg-rust/10 text-rust border-rust/30",
@@ -127,12 +129,12 @@ export function Avatar({ className, name = "U", src, ...props }) {
 export function Progress({ className, value = 0, ...props }) {
   return (
     <ProgressPrimitive.Root
-      className={cn("relative h-2 w-full overflow-hidden bg-bone-200 border border-line", className)}
+      className={cn("relative h-2 w-full overflow-hidden rounded-full bg-bone-200 border border-line", className)}
       value={value}
       {...props}
     >
       <ProgressPrimitive.Indicator
-        className="h-full w-full flex-1 bg-accent transition-all duration-300"
+        className="h-full w-full flex-1 bg-gradient-to-r from-accent via-[var(--signal)] to-[var(--violet)] transition-all duration-500"
         style={{ transform: `translateX(-${100 - (value || 0)}%)` }}
       />
     </ProgressPrimitive.Root>

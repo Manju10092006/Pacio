@@ -1,65 +1,182 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
-import { ArrowUpRight, ArrowRight, ChevronRight, Activity, Users, Briefcase, Database } from "lucide-react";
+import { Observer } from "gsap/Observer";
+import {
+  ArrowRight,
+  ArrowUpRight,
+  Brain,
+  BriefcaseBusiness,
+  CalendarClock,
+  CheckCircle2,
+  Database,
+  FileText,
+  GraduationCap,
+  Layers3,
+  ShieldCheck,
+  Sparkles,
+  Users,
+} from "lucide-react";
 import { api } from "../lib/api";
 import { Badge } from "../components/Primitives";
 
-gsap.registerPlugin(ScrollTrigger);
+gsap.registerPlugin(ScrollTrigger, Observer);
 
-/* Split text into characters for editorial reveals */
-function splitChars(node) {
-  if (!node || node.dataset.split === "1") return [];
-  const text = node.textContent;
-  node.textContent = "";
-  const words = text.split(/(\s+)/);
-  const spans = [];
-  words.forEach((w) => {
-    if (/^\s+$/.test(w)) {
-      node.appendChild(document.createTextNode(w));
-      return;
-    }
-    [...w].forEach((c) => {
-      const s = document.createElement("span");
-      s.className = "split-char inline-block";
-      s.textContent = c;
-      node.appendChild(s);
-      spans.push(s);
-    });
-  });
-  node.dataset.split = "1";
-  return spans;
+const modules = [
+  { icon: GraduationCap, title: "Student OS", copy: "Readiness, DSA, aptitude, ATS, interviews, applications, and schedule in one workspace.", signal: "Personal placement cockpit" },
+  { icon: Users, title: "Faculty Studio", copy: "Weak-topic detection, batch comparisons, intervention queues, comments, and coaching history.", signal: "Mentor intelligence" },
+  { icon: BriefcaseBusiness, title: "Recruiter Cloud", copy: "Talent discovery, saved filters, candidate matching, shortlists, and conversion analytics.", signal: "Who to interview next" },
+  { icon: ShieldCheck, title: "Institution Control", copy: "Department health, placement forecasting, audit logs, MOU context, and board-ready reports.", signal: "Mission control" },
+  { icon: Brain, title: "Readiness Engine", copy: "A dynamic score across DSA, aptitude, ATS, interviews, CGPA, and consistency.", signal: "Algorithmic placement signal" },
+  { icon: Database, title: "Placement Ledger", copy: "Every drive, stage, offer, package, department trend, and recruiter conversion connected.", signal: "Single source of truth" },
+];
+
+const brokenStack = ["Excel", "WhatsApp", "Google Sheets", "Manual PDFs", "Email threads", "Untracked calls"];
+
+const walkthrough = [
+  {
+    eyebrow: "01 / STUDENT",
+    title: "Practice without leaving CareerOS.",
+    copy: "Students move from readiness diagnosis to DSA solving, aptitude tests, ATS resume improvements, mock interviews, and applications inside one preparation loop.",
+    stats: ["455 DSA problems", "Timed aptitude room", "Mock interview recording"],
+  },
+  {
+    eyebrow: "02 / FACULTY",
+    title: "Coach the exact students who need attention.",
+    copy: "Faculty see weak topics, low consistency, revision due lists, interview gaps, and department-level risk cohorts with drill-downs.",
+    stats: ["Weak-topic queue", "Batch analytics", "Faculty comments"],
+  },
+  {
+    eyebrow: "03 / TPO",
+    title: "Run placements as a command center.",
+    copy: "TPOs monitor recruiter drives, applications, readiness forecasts, department health, reports, and communication from a single operational map.",
+    stats: ["Pipeline tracking", "Forecasting", "Reports engine"],
+  },
+  {
+    eyebrow: "04 / RECRUITER",
+    title: "Find the next best candidate instantly.",
+    copy: "Recruiters filter talent by skills, readiness, CGPA, department, ATS fit, interview scores, and placement intent.",
+    stats: ["Talent matching", "Saved filters", "Shortlists"],
+  },
+];
+
+function number(value, fallback = 0) {
+  const n = Number(value ?? fallback);
+  return Number.isFinite(n) ? n.toLocaleString() : fallback;
 }
 
-function NumberTicker({ value, decimals = 0, suffix = "", prefix = "", duration = 1.5 }) {
+function Counter({ value, suffix = "", prefix = "" }) {
   const ref = useRef(null);
   useEffect(() => {
-    if (!ref.current) return;
+    if (!ref.current) return undefined;
     const obj = { n: 0 };
     const tween = gsap.to(obj, {
-      n: value,
-      duration,
+      n: Number(value) || 0,
+      duration: 1.7,
       ease: "power3.out",
-      scrollTrigger: { trigger: ref.current, start: "top 90%" },
-      onUpdate() {
-        if (ref.current) {
-          ref.current.textContent = prefix + obj.n.toFixed(decimals) + suffix;
-        }
+      scrollTrigger: { trigger: ref.current, start: "top 88%" },
+      onUpdate: () => {
+        if (ref.current) ref.current.textContent = `${prefix}${Math.round(obj.n).toLocaleString()}${suffix}`;
       },
     });
     return () => tween.kill();
-  }, [value, decimals, suffix, prefix, duration]);
-  return <span ref={ref} className="font-mono tnum">{prefix}0{suffix}</span>;
+  }, [value, suffix, prefix]);
+  return <span ref={ref}>0{suffix}</span>;
+}
+
+function ProductWindow({ compact = false }) {
+  return (
+    <div className="aurora-card p-4 md:p-5">
+      <div className="flex items-center justify-between border-b border-white/10 pb-4">
+        <div className="flex items-center gap-2">
+          <span className="h-2.5 w-2.5 rounded-full bg-accent" />
+          <span className="h-2.5 w-2.5 rounded-full bg-[var(--signal)]" />
+          <span className="h-2.5 w-2.5 rounded-full bg-[var(--violet)]" />
+        </div>
+        <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-white/45">CareerOS Intelligence Layer</div>
+      </div>
+
+      <div className="grid grid-cols-12 gap-3 pt-4 text-white">
+        <div className="col-span-12 lg:col-span-4 rounded-[8px] border border-white/10 bg-white/[0.055] p-4">
+          <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-white/45">Readiness</div>
+          <div className="mt-4 flex items-end gap-3">
+            <div className="font-display text-6xl leading-none text-accent">87</div>
+            <div className="pb-2 text-sm text-white/55">dynamic score</div>
+          </div>
+          <div className="mt-5 space-y-2">
+            {[
+              ["DSA", 76, "bg-accent"],
+              ["ATS", 91, "bg-[var(--signal)]"],
+              ["Interview", 84, "bg-[var(--violet)]"],
+            ].map(([label, pct, color]) => (
+              <div key={label}>
+                <div className="mb-1 flex justify-between font-mono text-[10px] uppercase text-white/50"><span>{label}</span><span>{pct}%</span></div>
+                <div className="h-1.5 rounded-full bg-white/10"><div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} /></div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="col-span-12 lg:col-span-8 rounded-[8px] border border-white/10 bg-white/[0.055] p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-white/45">Placement Funnel</div>
+              <div className="font-display text-2xl tracking-tight">Every candidate, every stage.</div>
+            </div>
+            <Badge variant="signal">Live</Badge>
+          </div>
+          <div className="mt-5 grid grid-cols-5 gap-2">
+            {["Applied", "Shortlist", "Assess", "Interview", "Offer"].map((stage, i) => (
+              <div key={stage} className="rounded-[8px] border border-white/10 bg-black/15 p-3">
+                <div className="font-mono text-[9px] uppercase tracking-[0.16em] text-white/45">{stage}</div>
+                <div className="mt-3 h-24 rounded bg-white/10 p-1 flex items-end">
+                  <div className="w-full rounded bg-gradient-to-t from-accent via-[var(--signal)] to-[var(--violet)]" style={{ height: `${82 - i * 12}%` }} />
+                </div>
+                <div className="mt-2 font-display text-xl">{[238, 142, 91, 54, 27][i]}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {!compact && (
+          <>
+            <div className="col-span-12 md:col-span-6 rounded-[8px] border border-white/10 bg-white/[0.055] p-4">
+              <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-white/45">Risk Queue</div>
+              <div className="mt-4 space-y-2">
+                {["Low aptitude speed", "ATS keyword gap", "Interview confidence"].map((item, i) => (
+                  <div key={item} className="flex items-center justify-between rounded-[8px] border border-white/10 bg-black/15 px-3 py-2 text-sm">
+                    <span>{item}</span>
+                    <span className="font-mono text-[10px] text-accent">P{i + 1}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="col-span-12 md:col-span-6 rounded-[8px] border border-white/10 bg-white/[0.055] p-4">
+              <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-white/45">Recruiter Match</div>
+              <div className="mt-4 grid grid-cols-3 gap-2">
+                {["Google", "DE Shaw", "Adobe"].map((company, i) => (
+                  <div key={company} className="rounded-[8px] border border-white/10 bg-black/15 p-3">
+                    <div className="font-display text-sm">{company}</div>
+                    <div className="mt-3 font-mono text-[10px] text-white/45">fit</div>
+                    <div className="font-display text-2xl text-[var(--signal)]">{[92, 88, 84][i]}%</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export default function Landing() {
-  const heroH1Ref = useRef(null);
-  const heroSubRef = useRef(null);
-  const storyRef = useRef(null);
+  const rootRef = useRef(null);
+  const heroRef = useRef(null);
   const walkthroughRef = useRef(null);
   const [stats, setStats] = useState(null);
-  const [activeWalkthrough, setActiveWalkthrough] = useState(0);
+  const [activeStep, setActiveStep] = useState(0);
 
   useEffect(() => {
     api.get("/public/landing-stats").then(({ data }) => setStats(data)).catch(() => {});
@@ -67,189 +184,141 @@ export default function Landing() {
 
   useEffect(() => {
     const ctx = gsap.context(() => {
-      // HERO character stagger reveal
-      const heroChars = splitChars(heroH1Ref.current);
-      gsap.set(heroChars, { yPercent: 110, opacity: 0 });
-      gsap.to(heroChars, {
-        yPercent: 0,
-        opacity: 1,
-        duration: 1.2,
-        ease: "power4.out",
-        stagger: 0.01,
-        delay: 0.1,
-      });
+      const chars = heroRef.current?.querySelectorAll(".hero-char") || [];
+      gsap.fromTo(chars, { yPercent: 120, opacity: 0 }, { yPercent: 0, opacity: 1, duration: 1, ease: "power4.out", stagger: 0.008 });
 
-      // Subhead lines reveal
-      gsap.utils.toArray(".slice-line > span").forEach((el, i) => {
-        gsap.fromTo(el, { yPercent: 105 }, {
-          yPercent: 0,
-          duration: 1,
-          ease: "power3.out",
-          delay: 0.5 + i * 0.08,
-        });
-      });
-
-      // Standard scroll reveal triggers
-      gsap.utils.toArray(".reveal-up").forEach((el) => {
-        gsap.to(el, {
+      gsap.utils.toArray(".reveal-lift").forEach((el) => {
+        gsap.fromTo(el, { opacity: 0, y: 32 }, {
           opacity: 1,
           y: 0,
-          duration: 1,
+          duration: 0.9,
           ease: "power3.out",
-          scrollTrigger: { trigger: el, start: "top 92%" },
+          scrollTrigger: { trigger: el, start: "top 86%" },
         });
       });
 
-      // Pinned story timeline sequence
-      const storySteps = gsap.utils.toArray(".story-step");
-      if (storyRef.current && storySteps.length) {
+      gsap.utils.toArray(".float-panel").forEach((el, i) => {
+        gsap.to(el, { y: i % 2 ? 16 : -16, duration: 3.5 + i, repeat: -1, yoyo: true, ease: "sine.inOut" });
+      });
+
+      if (walkthroughRef.current) {
+        const cards = gsap.utils.toArray(".walk-card");
         ScrollTrigger.create({
-          trigger: storyRef.current,
+          trigger: walkthroughRef.current,
           start: "top top",
-          end: () => `+=${storySteps.length * 60}%`,
-          pin: ".story-pin",
-          pinSpacing: false,
-        });
-        storySteps.forEach((s) => {
-          gsap.to(s, {
-            opacity: 1,
-            y: 0,
-            duration: 1,
-            ease: "power3.out",
-            scrollTrigger: { trigger: s, start: "top 75%" },
-          });
+          end: "+=280%",
+          pin: ".walk-pin",
+          onUpdate: (self) => {
+            const index = Math.min(cards.length - 1, Math.floor(self.progress * cards.length));
+            setActiveStep(index);
+          },
         });
       }
-    });
+
+      Observer.create({
+        target: window,
+        type: "pointer,touch",
+        onMove: (self) => {
+          const x = (self.x / window.innerWidth - 0.5) * 14;
+          const y = (self.y / window.innerHeight - 0.5) * 14;
+          gsap.to(".hero-orbit", { x, y, duration: 0.6, ease: "power3.out" });
+        },
+      });
+    }, rootRef);
     return () => ctx.revert();
   }, []);
 
-  const walkthroughSteps = [
-    {
-      title: "Placement Command Center",
-      role: "TPO / PLACEMENT OFFICERS",
-      desc: "Live recruiter pipelines, real-time readiness scoring, drive health monitors, and predictive placement forecasts.",
-      kpis: ["700+ Offers", "140+ Recruiters", "98% Drive Health"],
-    },
-    {
-      title: "Student Placement Workspace",
-      role: "STUDENTS",
-      desc: "Personal placement OS: Striver A2Z DSA sheet progress, keyword-aware ATS resume builders, and mock interview reports.",
-      kpis: ["DSA Analytics", "ATS Score Feedback", "AI Interview Rubrics"],
-    },
-    {
-      title: "Faculty Coaching Dashboard",
-      role: "FACULTY & MENTORS",
-      desc: "Weak-student intervention queues, batch aptitude stats, and code compilation tracking.",
-      kpis: ["Intervention Triggers", "Topic Speed & Accuracy", "DSA Comments"],
-    },
-    {
-      title: "Recruiter Workspace",
-      role: "PARTNER RECRUITERS",
-      desc: "Qualified talent pool queries, instant shortlist builder, conversion funnels, and automated interview calendars.",
-      kpis: ["Talent Screener", "ICS / Calendar Scheduling", "Recruiter CRM"],
-    }
+  const headline = useMemo(() => "The Operating System For Placement Intelligence.", []);
+  const totals = stats?.totals || {};
+  const topRecruiters = stats?.top_recruiters?.slice(0, 8) || [
+    { company: "Amazon", selects: 42, max_ctc: 80 },
+    { company: "Google", selects: 38, max_ctc: 52 },
+    { company: "Microsoft", selects: 31, max_ctc: 44 },
+    { company: "Adobe", selects: 28, max_ctc: 38 },
   ];
 
   return (
-    <main className="bg-bone-100 text-ink-900 overflow-x-hidden">
-      {/* Navigation */}
-      <nav className="fixed top-0 inset-x-0 z-50 glass border-b border-line">
-        <div className="max-w-[1440px] mx-auto px-6 md:px-10 h-14 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-3" data-testid="brand-logo">
-            <div className="w-6 h-6 bg-ink grid place-items-center"><div className="w-1.5 h-1.5 bg-accent" /></div>
-            <span className="font-display font-bold tracking-tight text-[14px]">CareerOS</span>
-            <span className="font-mono text-[9px] tracking-[0.28em] text-ink-400 hidden md:inline">PLACEMENT · LAYER</span>
+    <main ref={rootRef} className="overflow-hidden bg-bone text-ink">
+      <nav className="fixed inset-x-0 top-0 z-50 border-b border-white/10 bg-[#071015]/70 backdrop-blur-xl">
+        <div className="mx-auto flex h-16 max-w-[1480px] items-center justify-between px-5 md:px-8">
+          <Link to="/" className="flex items-center gap-3 text-white">
+            <div className="grid h-9 w-9 place-items-center rounded-[8px] border border-white/12 bg-white/10">
+              <Sparkles size={17} className="text-accent" />
+            </div>
+            <div>
+              <div className="font-display text-sm font-bold tracking-tight">CareerOS</div>
+              <div className="font-mono text-[9px] uppercase tracking-[0.28em] text-white/42">Placement Intelligence</div>
+            </div>
           </Link>
-          <div className="hidden lg:flex items-center gap-7 text-xs font-mono tracking-wider uppercase">
-            <a href="#spreadsheets" className="ink-link">Why spreadsheets fail</a>
-            <a href="#story" className="ink-link">The struggles</a>
-            <a href="#intelligence" className="ink-link">Intelligence</a>
-            <a href="#walkthrough" className="ink-link">Product Walkthrough</a>
-            <a href="#outcomes" className="ink-link">Outcomes</a>
+          <div className="hidden items-center gap-7 font-mono text-[10px] uppercase tracking-[0.22em] text-white/54 lg:flex">
+            <a className="magnetic-link" href="#collapse">Why systems fail</a>
+            <a className="magnetic-link" href="#layer">Intelligence layer</a>
+            <a className="magnetic-link" href="#walkthrough">Walkthrough</a>
+            <a className="magnetic-link" href="#metrics">Live metrics</a>
           </div>
-          <Link to="/login" data-testid="nav-login-btn" className="group btn py-2 px-4 text-xs font-mono uppercase">
-            Sign In <ArrowUpRight size={13} className="group-hover:rotate-45 transition-transform" />
+          <Link to="/login" className="btn border-white/15 bg-white text-ink hover:border-accent hover:bg-accent hover:text-white">
+            Open App <ArrowUpRight size={15} />
           </Link>
         </div>
       </nav>
 
-      {/* Section 1: The Operating System For Placement Intelligence */}
-      <section className="relative min-h-screen pt-28 pb-16 px-6 md:px-10 grain flex flex-col justify-between">
-        <div className="max-w-[1440px] mx-auto w-full relative">
-          <div className="flex items-center gap-3 mb-10 reveal-up" data-testid="hero-eyebrow-row">
-            <span className="pill pill-accent">V3 INTELLIGENCE COMMAND ACTIVE</span>
-            <span className="font-mono text-[10px] text-ink-400 tracking-[0.18em]">THE PLACEMENT LAYER</span>
+      <section ref={heroRef} className="premium-hero px-5 pb-12 pt-28 text-white md:px-8">
+        <div className="relative z-10 mx-auto grid max-w-[1480px] grid-cols-12 gap-6">
+          <div className="col-span-12 lg:col-span-7">
+            <div className="reveal-lift mb-8 flex flex-wrap items-center gap-3">
+              <span className="rounded-full border border-white/12 bg-white/8 px-4 py-2 font-mono text-[10px] uppercase tracking-[0.24em] text-white/62 backdrop-blur">V3 enterprise layer</span>
+              <span className="rounded-full border border-[rgba(0,167,167,.34)] bg-[rgba(0,167,167,.12)] px-4 py-2 font-mono text-[10px] uppercase tracking-[0.24em] text-[var(--signal)]">Live campus telemetry</span>
+            </div>
+            <h1 className="max-w-5xl overflow-hidden font-display text-[13vw] font-black uppercase leading-[0.84] tracking-tight md:text-[8vw] lg:text-[6.8vw]">
+              {headline.split("").map((char, index) => (
+                <span key={`${char}-${index}`} className="hero-char inline-block">{char === " " ? "\u00a0" : char}</span>
+              ))}
+            </h1>
+            <p className="reveal-lift mt-8 max-w-2xl font-serif text-xl leading-relaxed text-white/68">
+              CareerOS connects preparation, coaching, recruitment, applications, interviews, reports, audit trails, and institution-wide placement forecasting into one decision system.
+            </p>
+            <div className="reveal-lift mt-10 flex flex-wrap items-center gap-3">
+              <Link to="/login" className="btn bg-accent text-white hover:bg-white hover:text-ink">
+                Deploy CareerOS <ArrowRight size={16} />
+              </Link>
+              <a href="#walkthrough" className="btn btn-ghost border-white/16 text-white hover:bg-white hover:text-ink">
+                Watch product story
+              </a>
+            </div>
           </div>
 
-          <h1
-            ref={heroH1Ref}
-            data-testid="hero-h1"
-            className="font-display font-black tracking-tightest leading-[0.88] text-[13vw] md:text-[9.5vw] lg:text-[8vw] uppercase"
-          >
-            The Operating System<br />For Placement Intelligence.
-          </h1>
-
-          <div className="mt-12 grid grid-cols-12 gap-8" ref={heroSubRef}>
-            <div className="col-span-12 md:col-span-7">
-              <div className="font-serif text-lg md:text-xl text-ink-700 leading-[1.45] max-w-xl">
-                <span className="slice-line"><span>Colleges run training. Companies run hiring.</span></span>
-                <span className="slice-line"><span>Between them sits a fog of spreadsheets,</span></span>
-                <span className="slice-line"><span>WhatsApp groups, and quarterly PDFs.</span></span>
-                <span className="slice-line"><span>CareerOS is the layer that makes it institutional.</span></span>
-              </div>
-              <div className="mt-8 flex flex-wrap items-center gap-3">
-                <Link to="/login" data-testid="hero-cta-primary" className="group btn">
-                  Open Command Center
-                  <ArrowRight size={15} className="group-hover:translate-x-1 transition-transform" />
-                </Link>
-                <a href="#spreadsheets" data-testid="hero-cta-secondary" className="btn btn-ghost border border-line-strong">
-                  Explore Narrative
-                </a>
-              </div>
-            </div>
-
-            <div className="col-span-12 md:col-span-5 md:col-start-8 self-end space-y-6 reveal-up">
-              <div className="hairline" />
-              <div className="grid grid-cols-2 gap-4">
-                <div data-testid="hero-stat-offers">
-                  <div className="font-mono text-[9px] tracking-[0.24em] text-ink-400">AY · 2025–26</div>
-                  <div className="font-display text-4xl mt-2"><NumberTicker value={702} /></div>
-                  <div className="text-xs text-ink-500 font-serif mt-1">offers across 148 recruiters</div>
-                </div>
-                <div data-testid="hero-stat-top">
-                  <div className="font-mono text-[9px] tracking-[0.24em] text-ink-400">TOP OFFER</div>
-                  <div className="font-display text-4xl mt-2"><NumberTicker value={80} prefix="₹" suffix="L" /></div>
-                  <div className="text-xs text-ink-500 font-serif mt-1">Amazon · SDE</div>
-                </div>
-                <div data-testid="hero-stat-students">
-                  <div className="font-mono text-[9px] tracking-[0.24em] text-ink-400">SEEDED RECORDS</div>
-                  <div className="font-display text-4xl mt-2"><NumberTicker value={stats?.totals?.students || 470} /></div>
-                  <div className="text-xs text-ink-500 font-serif mt-1">student analytics profiles</div>
-                </div>
-                <div data-testid="hero-stat-inst">
-                  <div className="font-mono text-[9px] tracking-[0.24em] text-ink-400">PARTNER INSTITUTIONS</div>
-                  <div className="font-display text-4xl mt-2"><NumberTicker value={stats?.totals?.institutions || 7} /></div>
-                  <div className="text-xs text-ink-500 font-serif mt-1">fully scoped campus hubs</div>
-                </div>
-              </div>
-            </div>
+          <div className="hero-orbit col-span-12 lg:col-span-5 lg:pt-12">
+            <ProductWindow />
           </div>
         </div>
 
-        {/* Live recruiter marquee */}
-        <div className="mt-16 border-t border-line pt-4 overflow-hidden">
-          <div className="font-mono text-[9px] tracking-[0.24em] text-ink-400 px-6 md:px-10 mb-2">PARTNER RECRUITERS · CONNECTED</div>
-          <div className="overflow-hidden">
-            <div className="flex marquee-track whitespace-nowrap will-change-transform">
-              {[...Array(2)].map((_, k) => (
-                <div key={k} className="flex items-center gap-14 px-8 shrink-0">
-                  {["Amazon","Google","Microsoft","Salesforce","ServiceNow","Adobe","Goldman Sachs","Intuit","Walmart Global Tech","DE Shaw","Cisco","JP Morgan","Nvidia","Oracle","SAP","Atlassian","Uber","Deloitte","Accenture","TCS","Infosys","ZS Associates","Capgemini"].map((c) => (
-                    <span key={`${k}-${c}`} className="font-display text-2xl md:text-3xl font-bold tracking-tight text-ink inline-flex items-center gap-3">
-                      <span>{c.toUpperCase()}</span>
-                      <span className="w-1.5 h-1.5 bg-accent" />
-                    </span>
-                  ))}
+        <div className="relative z-10 mx-auto mt-16 max-w-[1480px] overflow-hidden border-y border-white/10 py-5">
+          <div className="marquee-track flex w-max gap-12 whitespace-nowrap">
+            {[...topRecruiters, ...topRecruiters].map((r, i) => (
+              <div key={`${r.company}-${i}`} className="flex items-center gap-4 text-white/72">
+                <span className="font-display text-2xl uppercase tracking-tight">{r.company}</span>
+                <span className="font-mono text-[10px] uppercase tracking-[0.24em] text-accent">{r.selects} hires / {Number(r.max_ctc || 0).toFixed(1)}L</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section id="collapse" className="border-b border-line bg-paper px-5 py-28 md:px-8">
+        <div className="mx-auto grid max-w-[1480px] grid-cols-12 gap-8">
+          <div className="col-span-12 lg:col-span-5">
+            <Badge variant="danger">The old stack collapses</Badge>
+            <h2 className="mt-5 font-display text-5xl uppercase leading-[0.92] tracking-tight md:text-7xl">Spreadsheets were never built for placement intelligence.</h2>
+          </div>
+          <div className="col-span-12 lg:col-span-7">
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+              {brokenStack.map((item, i) => (
+                <div key={item} className="reveal-lift bento-tile flex min-h-[160px] flex-col justify-between p-6">
+                  <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-ink/35">Disconnected / {String(i + 1).padStart(2, "0")}</div>
+                  <div>
+                    <div className="font-display text-2xl uppercase tracking-tight">{item}</div>
+                    <div className="mt-2 text-sm text-ink/52">Cannot explain readiness, risk, conversion, or who needs attention now.</div>
+                  </div>
                 </div>
               ))}
             </div>
@@ -257,321 +326,139 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* Section 2: Why spreadsheets fail */}
-      <section id="spreadsheets" className="relative px-6 md:px-10 py-24 bg-paper border-t border-b border-line">
-        <div className="max-w-[1440px] mx-auto grid grid-cols-12 gap-8 items-center">
-          <div className="col-span-12 md:col-span-6 space-y-6">
-            <Badge variant="solid">THE EXCEL PARADOX</Badge>
-            <h2 className="font-display text-5xl tracking-tightest leading-[0.9] uppercase">
-              Spreadsheets fail<br />under coordination.
-            </h2>
-            <p className="font-serif text-lg text-ink-600 max-w-lg leading-relaxed">
-              When thousands of student details, interview slots, ATS logs, and recruiter feedback pipelines are updated simultaneously across departments, static sheets fall apart. Data gets out of date, messages get missed, and readiness remains completely invisible.
-            </p>
-          </div>
-          <div className="col-span-12 md:col-span-6 grid grid-cols-2 gap-4">
-            {[
-              { title: "Disconnected Data", desc: "Training updates live in separate logs from hiring drives, resulting in manual entry lag." },
-              { title: "Zero Telemetry", desc: "No tracker captures how long a student spent on a DSA challenge or their interview confidence delta." },
-              { title: "Audit Exposure", desc: "Recruiter contacts, MOU expiry timers, and contract SLAs are lost in faculty memory." },
-              { title: "Delayed Decisions", desc: "Placements happen, but forecasting reports take weeks to build and export manually." }
-            ].map((col, idx) => (
-              <div key={idx} className="border border-line-strong p-6 bg-bone-100/50 flex flex-col justify-between">
-                <div className="w-6 h-6 bg-ink grid place-items-center text-bone font-mono text-[10px]">{idx + 1}</div>
-                <div className="mt-6">
-                  <h4 className="font-display text-lg tracking-tight uppercase font-bold">{col.title}</h4>
-                  <p className="text-xs text-ink-500 font-serif mt-2 leading-relaxed">{col.desc}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Section 3: Why placement cells struggle */}
-      <section id="story" ref={storyRef} className="relative px-6 md:px-10 py-24 bg-bone-50 border-b border-line">
-        <div className="max-w-[1440px] mx-auto grid grid-cols-12 gap-8">
-          <div className="story-pin col-span-12 md:col-span-4 self-start md:sticky md:top-24 h-fit">
-            <div className="font-mono text-[9px] tracking-[0.28em] text-ink-400">§ THE CAMPUS CHALLENGE</div>
-            <h2 className="font-display text-5xl md:text-6xl tracking-tightest mt-3 leading-[0.96] uppercase" data-testid="story-title">
-              Why placement cells<br />struggle to scale.
-            </h2>
-            <p className="font-serif text-lg text-ink-500 mt-5 max-w-md">
-              Placement administration isn't about lack of effort—it's about lack of an integrated operating environment.
-            </p>
-          </div>
-          <div className="col-span-12 md:col-span-8 space-y-32 pt-8">
-            {[
-              { tag: "DISRUPTION · 01", title: "Gut-feel student assessments", body: "TPOs currently assess placement readiness using CGPA. But CGPA doesn't tell if a student can build a clean React layout, solve a complex array problem, or perform confidently in front of a senior technical panel." },
-              { tag: "DISRUPTION · 02", title: "Unmeasurable training ROI", body: "Campus training programs cost lakhs of rupees, yet completion percentages and student progression rates are compiled manually weeks after the final drive has closed." },
-              { tag: "DISRUPTION · 03", title: "Opaque recruiter relationships", body: "Drives are scheduled on the fly, resume PDF versions are sent back and forth via email, and the status of recruiter selection pipelines remains a black box until the final offers are hand-delivered." },
-              { tag: "DISRUPTION · 04", title: "MOU compliance blindspots", body: "Institutional partnerships have active legal guidelines and revenue share clauses. When these live in file cabinets, renewals slip past and audit trails are nonexistent." },
-            ].map((s, i) => (
-              <div key={i} className="story-step opacity-0 translate-y-12" data-testid={`story-step-${i}`}>
-                <div className="font-mono text-[9px] tracking-[0.28em] text-accent">{s.tag}</div>
-                <h3 className="font-display text-4xl md:text-5xl tracking-tightest mt-3 leading-[0.96] uppercase">{s.title}</h3>
-                <p className="font-serif text-lg text-ink-700 mt-4 max-w-xl">{s.body}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Section 4: Why readiness is invisible */}
-      <section className="relative px-6 md:px-10 py-24 bg-paper border-b border-line">
-        <div className="max-w-[1440px] mx-auto text-center space-y-6">
-          <Badge variant="outline">THE LAGGING INDICATOR</Badge>
-          <h2 className="font-display text-5xl md:text-7xl tracking-tightest uppercase leading-[0.95] max-w-4xl mx-auto">
-            Why readiness is invisible<br />on the traditional roster.
-          </h2>
-          <p className="font-serif text-lg text-ink-500 max-w-2xl mx-auto">
-            A student's CGPA is a lag score. It measures historical academic exam marks, not present market capabilities. True placement readiness is a composite algorithm that aggregates five live vectors.
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mt-12 text-left">
-            {[
-              { l: "DSA Mastery", desc: "Problems completed across 18 core topics and 474 problems of Striver A2Z sheet." },
-              { l: "ATS Score", desc: "A score on resume parser keyword density, format compatibility, and layout structure." },
-              { l: "Aptitude Speed", desc: "Avg speed and accuracy tracked across Quant, Reasoning, and Verbal ability sessions." },
-              { l: "Interview Rubric", desc: "Average confidence, communication, and technical depth scores from mock panels." },
-              { l: "Consistency index", desc: "Frequency and progression of active preparation over a rolling 30-day window." }
-            ].map((item, i) => (
-              <div key={i} className="border border-line-strong p-6 bg-bone-100/50 flex flex-col justify-between">
-                <span className="font-mono text-xs text-accent">VECTOR {String(i + 1).padStart(2, "0")}</span>
-                <div className="mt-4">
-                  <h4 className="font-display text-lg tracking-tight uppercase font-bold">{item.l}</h4>
-                  <p className="text-xs text-ink-500 font-serif mt-2 leading-relaxed">{item.desc}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Sections 5, 6, 7, 8: The Intelligence Canvas */}
-      <section id="intelligence" className="relative px-6 md:px-10 py-24 bg-ink text-bone border-b border-line">
-        <div className="max-w-[1440px] mx-auto">
-          <div className="grid grid-cols-12 gap-8 mb-14">
-            <div className="col-span-12 md:col-span-6">
-              <div className="font-mono text-[9px] tracking-[0.28em] text-bone/45">§ THE INTELLIGENCE MATRIX</div>
-              <h2 className="font-display text-5xl md:text-7xl tracking-tightest mt-3 leading-[0.92] uppercase" data-testid="modules-title">
-                One integrated canvas.<br /><span className="text-accent">Zero spreadsheets.</span>
-              </h2>
+      <section id="layer" className="px-5 py-28 md:px-8">
+        <div className="mx-auto max-w-[1480px]">
+          <div className="grid grid-cols-12 gap-8">
+            <div className="col-span-12 lg:col-span-6">
+              <Badge variant="signal">Everything connects</Badge>
+              <h2 className="mt-5 font-display text-5xl uppercase leading-[0.92] tracking-tight md:text-7xl">One intelligence layer for every role.</h2>
             </div>
-            <div className="col-span-12 md:col-span-5 md:col-start-8 self-end">
-              <p className="font-serif text-lg text-bone/70" data-testid="modules-subtitle">
-                CareerOS consolidates the entire placement operation into four key intelligence modules, each replacing dozens of manually compiled sheets.
+            <div className="col-span-12 lg:col-span-5 lg:col-start-8">
+              <p className="font-serif text-xl leading-relaxed text-ink/62">
+                The product is built around decisions, not dashboards. Every module answers a real operational question for students, faculty, TPOs, institutions, and recruiters.
               </p>
             </div>
           </div>
 
-          <div className="grid grid-cols-12 gap-4">
-            {/* Section 5: Student Intelligence */}
-            <div className="col-span-12 md:col-span-6 border border-bone/15 p-8 flex flex-col justify-between min-h-[300px]" data-testid="module-01">
-              <div className="flex items-start justify-between">
-                <span className="font-mono text-xs text-bone/45">MODULE 01 / STUDENT</span>
-                <Users className="text-accent" size={20} />
-              </div>
-              <div>
-                <h3 className="font-display text-3xl tracking-tight uppercase mt-8">Student Intelligence</h3>
-                <p className="text-bone/60 text-sm font-serif mt-3">
-                  Consolidated readiness index derived in real-time from active prep vectors. Connects student academic history directly with active placement eligibility.
-                </p>
-              </div>
-            </div>
-
-            {/* Section 6: Training Intelligence */}
-            <div className="col-span-12 md:col-span-6 border border-bone/15 p-8 flex flex-col justify-between min-h-[300px]" data-testid="module-02">
-              <div className="flex items-start justify-between">
-                <span className="font-mono text-xs text-bone/45">MODULE 02 / TRAINING</span>
-                <Activity className="text-accent" size={20} />
-              </div>
-              <div>
-                <h3 className="font-display text-3xl tracking-tight uppercase mt-8">Training Intelligence</h3>
-                <p className="text-bone/60 text-sm font-serif mt-3">
-                  Classroom training completion metrics, automatic weak-student intervention cues, and speed/accuracy analytics.
-                </p>
-              </div>
-            </div>
-
-            {/* Section 7: Recruiter Intelligence */}
-            <div className="col-span-12 md:col-span-6 border border-bone/15 p-8 flex flex-col justify-between min-h-[300px]" data-testid="module-08">
-              <div className="flex items-start justify-between">
-                <span className="font-mono text-xs text-bone/45">MODULE 03 / RECRUITER</span>
-                <Briefcase className="text-accent" size={20} />
-              </div>
-              <div>
-                <h3 className="font-display text-3xl tracking-tight uppercase mt-8">Recruiter Intelligence</h3>
-                <p className="text-bone/60 text-sm font-serif mt-3">
-                  Recruiter candidate discovery, automated calendar schedules, and selection funnels. Elevates the student pipeline into a professional recruitment workspace.
-                </p>
-              </div>
-            </div>
-
-            {/* Section 8: Placement Intelligence */}
-            <div className="col-span-12 md:col-span-6 border border-bone/15 p-8 flex flex-col justify-between min-h-[300px]" data-testid="module-07">
-              <div className="flex items-start justify-between">
-                <span className="font-mono text-xs text-bone/45">MODULE 04 / PLACEMENT</span>
-                <Database className="text-accent" size={20} />
-              </div>
-              <div>
-                <h3 className="font-display text-3xl tracking-tight uppercase mt-8">Placement Intelligence</h3>
-                <p className="text-bone/60 text-sm font-serif mt-3">
-                  A multi-year ledger of drives, CTC package ranges, and department-wise outcomes, delivering data-driven forecasting directly to the TPO command center.
-                </p>
-              </div>
-            </div>
+          <div className="mt-12 grid grid-cols-12 gap-4">
+            {modules.map((item, i) => {
+              const Icon = item.icon;
+              return (
+                <div key={item.title} className={`reveal-lift bento-tile data-glow p-7 ${i === 0 || i === 4 ? "col-span-12 lg:col-span-6" : "col-span-12 md:col-span-6 lg:col-span-3"}`}>
+                  <div className="flex items-start justify-between">
+                    <div className="grid h-11 w-11 place-items-center rounded-[8px] bg-ink text-bone"><Icon size={19} /></div>
+                    <span className="font-mono text-[10px] uppercase tracking-[0.24em] text-accent">{item.signal}</span>
+                  </div>
+                  <div className="mt-10">
+                    <h3 className="font-display text-3xl uppercase tracking-tight">{item.title}</h3>
+                    <p className="mt-3 max-w-md text-sm leading-relaxed text-ink/58">{item.copy}</p>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       </section>
 
-      {/* Section 9: Pinned product walkthrough */}
-      <section id="walkthrough" ref={walkthroughRef} className="relative px-6 md:px-10 py-24 bg-paper border-b border-line">
-        <div className="max-w-[1440px] mx-auto grid grid-cols-12 gap-8 items-start">
-          <div className="col-span-12 md:col-span-5 space-y-6 md:sticky md:top-24">
-            <Badge variant="solid">PRODUCT TOUR</Badge>
-            <h2 className="font-display text-5xl tracking-tightest leading-[0.9] uppercase">
-              Role Workspaces
-            </h2>
-            <p className="font-serif text-lg text-ink-600 max-w-md">
-              Every user role has an interface customized for their operational needs. Explore the four distinct interfaces.
-            </p>
-            <div className="space-y-2 pt-4">
-              {walkthroughSteps.map((step, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => setActiveWalkthrough(idx)}
-                  className={`w-full text-left p-4 border transition-all flex items-center justify-between font-mono text-xs uppercase tracking-wider ${
-                    activeWalkthrough === idx
-                      ? "bg-ink text-bone border-ink"
-                      : "bg-bone-100 hover:bg-bone-200 border-line-strong"
-                  }`}
-                >
-                  <span>{step.title}</span>
-                  <ChevronRight size={14} />
+      <section id="walkthrough" ref={walkthroughRef} className="relative bg-[#071015] px-5 py-28 text-white md:px-8">
+        <div className="walk-pin mx-auto grid max-w-[1480px] grid-cols-12 gap-8">
+          <div className="col-span-12 lg:col-span-5">
+            <Badge variant="accent">Pinned walkthrough</Badge>
+            <h2 className="mt-5 font-display text-5xl uppercase leading-[0.92] tracking-tight md:text-7xl">A product OS, not a dashboard.</h2>
+            <div className="story-rail mt-10 space-y-8">
+              {walkthrough.map((step, i) => (
+                <button key={step.title} onClick={() => setActiveStep(i)} className={`story-node block text-left transition-opacity ${activeStep === i ? "opacity-100" : "opacity-38"}`}>
+                  <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-accent">{step.eyebrow}</div>
+                  <div className="mt-1 font-display text-2xl uppercase tracking-tight">{step.title}</div>
                 </button>
               ))}
             </div>
           </div>
-
-          <div className="col-span-12 md:col-span-7 border border-line-strong p-8 bg-bone-50/50 space-y-6">
-            <div className="font-mono text-[10px] tracking-[0.24em] text-ink-400">
-              {walkthroughSteps[activeWalkthrough].role}
+          <div className="col-span-12 lg:col-span-7">
+            <div className="walk-card aurora-card p-6 md:p-8">
+              <div className="font-mono text-[10px] uppercase tracking-[0.28em] text-white/45">{walkthrough[activeStep].eyebrow}</div>
+              <h3 className="mt-4 font-display text-4xl uppercase leading-tight tracking-tight text-white md:text-6xl">{walkthrough[activeStep].title}</h3>
+              <p className="mt-5 max-w-2xl font-serif text-lg leading-relaxed text-white/62">{walkthrough[activeStep].copy}</p>
+              <div className="mt-8 grid grid-cols-1 gap-3 md:grid-cols-3">
+                {walkthrough[activeStep].stats.map((stat) => (
+                  <div key={stat} className="rounded-[8px] border border-white/10 bg-white/[0.06] p-4">
+                    <CheckCircle2 size={17} className="text-[var(--signal)]" />
+                    <div className="mt-3 font-display text-xl tracking-tight">{stat}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-8">
+                <ProductWindow compact />
+              </div>
             </div>
-            <h3 className="font-display text-3xl tracking-tight uppercase text-accent">
-              {walkthroughSteps[activeWalkthrough].title}
-            </h3>
-            <p className="font-serif text-base text-ink-600 leading-relaxed">
-              {walkthroughSteps[activeWalkthrough].desc}
-            </p>
+          </div>
+        </div>
+      </section>
 
-            <div className="grid grid-cols-3 gap-3 pt-6 border-t border-line-strong">
-              {walkthroughSteps[activeWalkthrough].kpis.map((kpi, i) => (
-                <div key={i} className="border border-line bg-paper p-4 text-center">
-                  <div className="font-mono text-[9px] text-ink-400">V3 STANDARD</div>
-                  <div className="font-display text-lg mt-2 truncate font-bold">{kpi}</div>
+      <section id="metrics" className="border-b border-line bg-paper px-5 py-28 md:px-8">
+        <div className="mx-auto max-w-[1480px]">
+          <div className="grid grid-cols-12 gap-8">
+            <div className="col-span-12 lg:col-span-5">
+              <Badge variant="violet">Live operating metrics</Badge>
+              <h2 className="mt-5 font-display text-5xl uppercase leading-[0.92] tracking-tight md:text-7xl">Measure the campus machine in real time.</h2>
+            </div>
+            <div className="col-span-12 grid grid-cols-2 gap-4 lg:col-span-7 md:grid-cols-4">
+              {[
+                ["Students", totals.students || 470, Users],
+                ["Institutions", totals.institutions || 7, Layers3],
+                ["Open drives", totals.jobs || 65, CalendarClock],
+                ["Applications", totals.applications || 880, FileText],
+              ].map(([label, value, Icon]) => (
+                <div key={label} className="reveal-lift bento-tile p-6">
+                  <Icon size={20} className="text-accent" />
+                  <div className="mt-8 font-display text-5xl tracking-tight"><Counter value={value} /></div>
+                  <div className="mt-2 font-mono text-[10px] uppercase tracking-[0.22em] text-ink/42">{label}</div>
                 </div>
               ))}
             </div>
           </div>
-        </div>
-      </section>
 
-      {/* Section 10: Live metrics */}
-      <section className="relative px-6 md:px-10 py-24 bg-bone-50 border-b border-line">
-        <div className="max-w-[1440px] mx-auto text-center space-y-8">
-          <div className="font-mono text-[10px] tracking-[0.28em] text-ink-400">§ TELEMETRY STREAM · ACTIVE</div>
-          <h2 className="font-display text-5xl md:text-7xl tracking-tightest uppercase leading-[0.95]">
-            Placement metrics,<br />measured in real-time.
-          </h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-5xl mx-auto pt-8">
-            <div className="border border-line-strong bg-paper p-8 text-center">
-              <div className="font-mono text-[10px] text-ink-400 tracking-[0.24em]">SEEDED STUDENTS</div>
-              <div className="font-display text-6xl mt-4 text-accent">
-                <NumberTicker value={stats?.totals?.students || 470} />
-              </div>
-            </div>
-            <div className="border border-line-strong bg-paper p-8 text-center">
-              <div className="font-mono text-[10px] text-ink-400 tracking-[0.24em]">ACTIVE DRIVES</div>
-              <div className="font-display text-6xl mt-4">
-                <NumberTicker value={stats?.totals?.jobs || 65} />
-              </div>
-            </div>
-            <div className="border border-line-strong bg-paper p-8 text-center">
-              <div className="font-mono text-[10px] text-ink-400 tracking-[0.24em]">PARTNER INSTITUTIONS</div>
-              <div className="font-display text-6xl mt-4">
-                <NumberTicker value={stats?.totals?.institutions || 7} />
-              </div>
-            </div>
-            <div className="border border-line-strong bg-paper p-8 text-center">
-              <div className="font-mono text-[10px] text-ink-400 tracking-[0.24em]">COMPLETED OUTCOMES</div>
-              <div className="font-display text-6xl mt-4">
-                <NumberTicker value={955} />
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Section 11: Institution outcomes */}
-      <section id="outcomes" className="px-6 md:px-10 py-24 bg-paper">
-        <div className="max-w-[1440px] mx-auto">
-          <div className="grid grid-cols-12 gap-8 mb-10">
-            <div className="col-span-12 md:col-span-6">
-              <div className="font-mono text-[10px] tracking-[0.28em] text-ink-400">§ LIVE LEDGER</div>
-              <h2 className="font-display text-5xl md:text-6xl tracking-tightest mt-3 uppercase">Top selections on record.</h2>
-            </div>
-            <div className="col-span-12 md:col-span-5 md:col-start-8 self-end">
-              <p className="font-serif text-lg text-ink-700">Pulled live from the placement database. Sorted by all-time selections.</p>
-            </div>
-          </div>
-
-          <div className="editorial border border-line-strong bg-paper">
-            <div className="grid grid-cols-12 px-6 py-3 border-b border-line-strong bg-bone-100 font-mono text-[10px] tracking-[0.24em] text-ink-400 uppercase">
+          <div className="mt-12 premium-table">
+            <div className="grid grid-cols-12 border-b border-line bg-bone-100 px-6 py-4 font-mono text-[10px] uppercase tracking-[0.24em] text-ink/45">
               <div className="col-span-1">#</div>
-              <div className="col-span-5">RECRUITER</div>
-              <div className="col-span-3 text-right">SELECTS · ALL TIME</div>
-              <div className="col-span-3 text-right">MAX CTC</div>
+              <div className="col-span-5">Recruiter</div>
+              <div className="col-span-3 text-right">Selections</div>
+              <div className="col-span-3 text-right">Max package</div>
             </div>
-            {(stats?.top_recruiters || []).slice(0, 12).map((r, i) => (
-              <div key={r.company} className="grid grid-cols-12 px-6 py-5 border-b border-line items-center hover:bg-bone-100/50 transition-colors group" data-testid={`recruiter-row-${i}`}>
-                <div className="col-span-1 font-mono text-sm text-ink-400">{String(i + 1).padStart(2, "0")}</div>
-                <div className="col-span-5 font-display text-2xl tracking-tight group-hover:text-accent transition-colors uppercase font-bold">{r.company}</div>
-                <div className="col-span-3 text-right font-mono text-lg tnum">{r.selects}</div>
-                <div className="col-span-3 text-right font-mono text-lg text-accent tnum font-bold">₹{r.max_ctc?.toFixed(1)}LPA</div>
+            {topRecruiters.map((r, i) => (
+              <div key={r.company} className="grid grid-cols-12 items-center border-b border-line px-6 py-5 last:border-b-0">
+                <div className="col-span-1 font-mono text-sm text-ink/36">{String(i + 1).padStart(2, "0")}</div>
+                <div className="col-span-5 font-display text-2xl uppercase tracking-tight">{r.company}</div>
+                <div className="col-span-3 text-right font-mono text-lg">{number(r.selects)}</div>
+                <div className="col-span-3 text-right font-mono text-lg text-accent">{Number(r.max_ctc || 0).toFixed(1)}L</div>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Section 12: Final CTA */}
-      <section id="cta" className="px-6 md:px-10 py-36 bg-ink text-bone relative overflow-hidden">
-        <div className="max-w-[1440px] mx-auto relative">
-          <div className="font-mono text-[11px] tracking-[0.28em] text-bone/45">§ GET ACCESS</div>
-          <h2 className="font-display text-6xl md:text-[8vw] tracking-tightest leading-[0.9] mt-6 max-w-5xl uppercase">
-            Bring your placement cell<br /><span className="text-accent">into the present.</span>
-          </h2>
-          <p className="font-serif text-xl text-bone/70 mt-8 max-w-2xl">
-            Verified institutional partners only. Onboarding takes 9 minutes — Google OAuth + super-admin approval.
-          </p>
-          <div className="mt-12 flex flex-wrap gap-4">
-            <Link to="/login" data-testid="footer-cta-primary" className="inline-flex items-center gap-3 bg-accent text-bone px-8 py-5 text-base font-mono uppercase tracking-wider hover:bg-bone hover:text-ink transition-colors">
-              Request access <ArrowUpRight size={18} />
-            </Link>
-            <a href="mailto:hello@careeros.app" className="inline-flex items-center gap-3 border border-bone/35 px-8 py-5 text-base font-mono uppercase tracking-wider hover:border-accent hover:text-accent transition-colors">
-              Talk to founders
-            </a>
+      <section className="premium-hero min-h-[76vh] px-5 py-28 text-white md:px-8">
+        <div className="relative z-10 mx-auto max-w-[1480px]">
+          <div className="max-w-5xl">
+            <div className="font-mono text-[11px] uppercase tracking-[0.3em] text-white/42">Deploy CareerOS</div>
+            <h2 className="mt-6 font-display text-[13vw] uppercase leading-[0.84] tracking-tight md:text-[8vw] lg:text-[6.5vw]">
+              Build the placement cell of the next decade.
+            </h2>
+            <p className="mt-8 max-w-2xl font-serif text-xl leading-relaxed text-white/62">
+              Give every student, faculty member, recruiter, TPO, and institution admin a real operating system for placement intelligence.
+            </p>
+            <div className="mt-10 flex flex-wrap gap-3">
+              <Link to="/login" className="btn bg-white text-ink hover:bg-accent hover:text-white">Enter CareerOS <ArrowRight size={16} /></Link>
+              <a href="mailto:hello@careeros.app" className="btn btn-ghost border-white/15 text-white hover:bg-white hover:text-ink">Talk to founders</a>
+            </div>
           </div>
         </div>
       </section>
 
-      <footer className="px-6 md:px-10 py-10 border-t border-line bg-bone-100">
-        <div className="max-w-[1440px] mx-auto flex flex-col md:flex-row items-start md:items-center justify-between gap-5">
-          <div className="flex items-center gap-3">
-            <div className="w-6 h-6 bg-ink grid place-items-center"><div className="w-1.5 h-1.5 bg-accent" /></div>
-            <span className="font-mono text-[11px] tracking-[0.24em] text-ink-500">CAREEROS · PLATFORM LAYER · {new Date().getFullYear()}</span>
-          </div>
-          <div className="font-mono text-[11px] tracking-[0.24em] text-ink-400">DATA SEEDED FROM KMIT.IN/PLACEMENTS · 2017–2026</div>
+      <footer className="border-t border-line px-5 py-8 md:px-8">
+        <div className="mx-auto flex max-w-[1480px] flex-col justify-between gap-4 font-mono text-[10px] uppercase tracking-[0.24em] text-ink/45 md:flex-row">
+          <span>CareerOS / Placement Intelligence Layer</span>
+          <span>Students / Faculty / TPO / Recruiters / Institutions</span>
         </div>
       </footer>
     </main>

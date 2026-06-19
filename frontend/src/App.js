@@ -38,6 +38,7 @@ import RecruiterHome from "./pages/RecruiterHome";
 import TalentPool from "./pages/TalentPool";
 import StudentHome from "./pages/StudentHome";
 import StudentDSA from "./pages/StudentDSA";
+import StudentDSAProblem from "./pages/StudentDSAProblem";
 import StudentAptitude from "./pages/StudentAptitude";
 import StudentATS from "./pages/StudentATS";
 import StudentInterviews from "./pages/StudentInterviews";
@@ -185,6 +186,7 @@ function AppRouter() {
       <Route path="/student" element={<Protected allow={["student"]}><RoleLayout {...roleConfig.student} /></Protected>}>
         <Route index element={<StudentHome />} />
         <Route path="dsa" element={<StudentDSA />} />
+        <Route path="dsa/:questionId" element={<StudentDSAProblem />} />
         <Route path="aptitude" element={<StudentAptitude />} />
         <Route path="ats" element={<StudentATS />} />
         <Route path="interviews" element={<StudentInterviews />} />

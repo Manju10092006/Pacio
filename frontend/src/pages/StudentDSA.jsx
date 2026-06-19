@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../lib/api";
+import { useNavigate } from "react-router-dom";
 import Editor from "@monaco-editor/react";
 import { CheckCircle2, Circle, Plus, Minus, Play, Send } from "lucide-react";
 import { Button, Input, Textarea, Select, Badge, Progress, SheetRoot, SheetContent } from "../components/Primitives";
 import { PageTransition, DashboardReveal, CounterAnimation } from "../components/Motion";
 
 export default function StudentDSA() {
+  const navigate = useNavigate();
   const [d, setD] = useState(null);
   const [selectedQuestion, setSelectedQuestion] = useState(null);
   const [attempts, setAttempts] = useState([]);
@@ -197,10 +199,7 @@ export default function StudentDSA() {
                     <button
                       key={question.question_id}
                       onClick={() => {
-                        setSelectedQuestion(question);
-                        setFormStatus(question.solved ? "solved" : "attempted");
-                        setExecution(null);
-                        loadQuestionDetails(question.question_id);
+                        navigate(`/student/dsa/${question.question_id}`);
                       }}
                       className="w-full grid grid-cols-[20px_1fr_auto] gap-2 items-center text-left px-2.5 py-2 border border-transparent hover:border-line-strong hover:bg-bone-100/50 transition-all font-sans"
                       data-testid={`sdsa-question-${question.question_id}`}

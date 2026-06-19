@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { Badge, Progress, Select } from "../components/Primitives";
 import { PageTransition, CounterAnimation, DashboardReveal } from "../components/Motion";
-import { Camera, Mic, MicOff, MonitorUp, Play, Send, Video, VideoOff } from "lucide-react";
+import { Camera, Mic, MicOff, MonitorUp, Play, Send, Square, Video, VideoOff } from "lucide-react";
 import { toast } from "sonner";
 
 export default function StudentInterviews() {
@@ -16,8 +16,13 @@ export default function StudentInterviews() {
   const [micOn, setMicOn] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [feedback, setFeedback] = useState(null);
+  const [recording, setRecording] = useState(false);
+  const [recordings, setRecordings] = useState({});
   const videoRef = useRef(null);
   const streamRef = useRef(null);
+  const recorderRef = useRef(null);
+  const chunksRef = useRef([]);
+  const recognitionRef = useRef(null);
 
   const load = () => api.get("/interviews/history").then(({ data }) => setHistory(data)).catch(() => setHistory({ items: [] }));
   useEffect(() => { load(); }, []);
@@ -37,6 +42,16 @@ export default function StudentInterviews() {
     } catch {
       toast.error("Camera or microphone permission was not granted");
     }
+  };
+
+  const ensureMedia = async () => {
+    if (streamRef.current) return streamRef.current;
+    const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    streamRef.current = stream;
+    if (videoRef.current) videoRef.current.srcObject = stream;
+    setCameraOn(true);
+    setMicOn(true);
+    return stream;
   };
 
   const toggleMic = () => {
@@ -61,6 +76,62 @@ export default function StudentInterviews() {
     toast.success("Mock interview started");
   };
 
+  const startRecording = async () => {
+    if (!session || !activeQuestion) return;
+    try {
+      const stream = await ensureMedia();
+      chunksRef.current = [];
+      const recorder = new MediaRecorder(stream, { mimeType: MediaRecorder.isTypeSupported("video/webm") ? "video/webm" : undefined });
+      recorderRef.current = recorder;
+      recorder.ondataavailable = (event) => {
+        if (event.data?.size) chunksRef.current.push(event.data);
+      };
+      recorder.onstop = () => {
+        const blob = new Blob(chunksRef.current, { type: recorder.mimeType || "video/webm" });
+        const url = URL.createObjectURL(blob);
+        setRecordings((current) => ({
+          ...current,
+          [activeQuestion.question_id]: {
+            url,
+            size: blob.size,
+            recording_id: `browser_rec_${activeQuestion.question_id}_${Date.now()}`,
+          },
+        }));
+      };
+      recorder.start();
+
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (SpeechRecognition) {
+        const recognition = new SpeechRecognition();
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.lang = "en-US";
+        recognition.onresult = (event) => {
+          let transcript = "";
+          for (let i = 0; i < event.results.length; i += 1) {
+            transcript += `${event.results[i][0].transcript} `;
+          }
+          setAnswer(transcript.trim());
+        };
+        recognition.start();
+        recognitionRef.current = recognition;
+      }
+      setRecording(true);
+      toast.success("Recording started. Speak your answer.");
+    } catch {
+      toast.error("Unable to start recording. Check camera and microphone permissions.");
+    }
+  };
+
+  const stopRecording = () => {
+    try { recognitionRef.current?.stop?.(); } catch {}
+    recognitionRef.current = null;
+    if (recorderRef.current?.state === "recording") recorderRef.current.stop();
+    recorderRef.current = null;
+    setRecording(false);
+    toast.success("Recording saved for this answer");
+  };
+
   const saveAnswer = async () => {
     const question = session?.questions?.[active];
     if (!question) return;
@@ -69,7 +140,8 @@ export default function StudentInterviews() {
       prompt: question.prompt,
       transcript: answer,
       response_seconds: Math.max(20, seconds),
-      recording_id: cameraOn ? `browser_recording_${question.question_id}` : null,
+      recording_id: recordings[question.question_id]?.recording_id || null,
+      recording_size: recordings[question.question_id]?.size || 0,
     });
     setAnswer("");
     setActive((index) => Math.min(index + 1, session.questions.length - 1));
@@ -77,6 +149,7 @@ export default function StudentInterviews() {
   };
 
   const completeInterview = async () => {
+    if (recording) stopRecording();
     if (answer.trim()) await saveAnswer();
     const { data } = await api.post(`/me/interviews/mock/${session.session_id}/complete`, { notes, camera_enabled: cameraOn, microphone_enabled: micOn });
     setFeedback(data);
@@ -144,9 +217,19 @@ export default function StudentInterviews() {
                 <div className="h-full flex flex-col">
                   <div className="font-mono text-[10px] tracking-[0.24em] text-ink-400">QUESTION {active + 1}/{session.questions.length}</div>
                   <div className="font-display text-2xl mt-4">{activeQuestion?.prompt}</div>
-                  <textarea value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder="Type or paste your spoken answer transcript here after answering aloud..." className="mt-6 min-h-[220px] w-full border border-line bg-bone-50 p-4 text-sm" />
-                  <div className="mt-4 grid grid-cols-2 gap-3">
+                  <div className="mt-5 grid grid-cols-2 gap-3">
+                    {!recording ? (
+                      <button onClick={startRecording} className="btn justify-center py-3 text-xs"><Mic size={14} /> Start Recording</button>
+                    ) : (
+                      <button onClick={stopRecording} className="btn justify-center py-3 text-xs bg-accent text-bone"><Square size={14} /> Stop Recording</button>
+                    )}
                     <button onClick={saveAnswer} className="btn justify-center py-3 text-xs"><Send size={14} /> Save Answer</button>
+                  </div>
+                  <textarea value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder="Transcript appears here while you speak. You can edit it before saving." className="mt-4 min-h-[180px] w-full border border-line bg-bone-50 p-4 text-sm" />
+                  {recordings[activeQuestion?.question_id]?.url && (
+                    <video controls src={recordings[activeQuestion.question_id].url} className="mt-3 w-full border border-line bg-ink" />
+                  )}
+                  <div className="mt-4 grid grid-cols-1 gap-3">
                     <button onClick={completeInterview} className="btn justify-center py-3 text-xs">Complete</button>
                   </div>
                   {feedback && (

@@ -14,8 +14,9 @@ export default function RecruiterAnalytics() {
       api.get("/recruiters/me/shortlists"),
     ]);
     if (aRes.status === "fulfilled") setAnalytics(aRes.value.data);
-    if (rRes.status === "fulfilled") setRecs(rRes.value.data?.recommendations || rRes.value.data || []);
-    if (sRes.status === "fulfilled") setShortlists(sRes.value.data?.shortlists || sRes.value.data || []);
+    else setAnalytics({ pipeline: {}, job_funnels: [], action_queue: [], summary: {} });
+    if (rRes.status === "fulfilled") setRecs(rRes.value.data?.items || rRes.value.data?.recommendations || []);
+    if (sRes.status === "fulfilled") setShortlists(sRes.value.data?.items || sRes.value.data?.shortlists || []);
   };
   useEffect(() => { load(); }, []);
 
@@ -114,10 +115,10 @@ export default function RecruiterAnalytics() {
                 </div>
                 <div className="col-span-2">
                   <span className={`text-xs px-2 py-1 ${
-                    rec.classification === "Interview next" ? "bg-green-900/30 text-green-300" :
-                    rec.classification === "Keep warm" ? "bg-yellow-900/30 text-yellow-300" :
+                    (rec.classification || rec.answer) === "Interview next" ? "bg-green-900/30 text-green-300" :
+                    (rec.classification || rec.answer) === "Keep warm" ? "bg-yellow-900/30 text-yellow-300" :
                     "bg-bone-100/10 text-bone-100/60"
-                  }`}>{rec.classification || rec.recommendation}</span>
+                  }`}>{rec.classification || rec.answer || rec.recommendation}</span>
                 </div>
                 <div className="col-span-2 text-right">
                   <button onClick={() => shortlistCandidate(rec.student_id, rec.job_id)} className="text-xs font-mono px-3 py-1 border border-bone-100/20 hover:bg-bone-100/10 transition-colors">SHORTLIST</button>

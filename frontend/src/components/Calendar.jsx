@@ -93,31 +93,31 @@ export function Calendar({ events = [], onEventClick }) {
   };
 
   return (
-    <div className="border border-line-strong bg-paper p-6 shadow-sm space-y-4">
+    <div className="dashboard-card p-5 sm:p-6 space-y-5">
       {/* Calendar Controls */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-line pb-4">
         <div className="flex items-center gap-3">
-          <div className="flex border border-line-strong font-mono">
+          <div className="flex rounded-full border border-line-strong bg-white/72 p-1">
             <button
               onClick={() => setView("month")}
-              className={cn("px-3 py-1.5 text-xs hover:bg-bone-200 uppercase", view === "month" && "bg-ink text-bone hover:bg-ink")}
+              className={cn("rounded-full px-3 py-1.5 text-sm font-medium hover:bg-bone-200", view === "month" && "bg-ink text-bone hover:bg-ink")}
             >
               Month
             </button>
             <button
               onClick={() => setView("week")}
-              className={cn("px-3 py-1.5 text-xs border-l border-line-strong hover:bg-bone-200 uppercase", view === "week" && "bg-ink text-bone hover:bg-ink")}
+              className={cn("rounded-full px-3 py-1.5 text-sm font-medium hover:bg-bone-200", view === "week" && "bg-ink text-bone hover:bg-ink")}
             >
               Week
             </button>
             <button
               onClick={() => setView("agenda")}
-              className={cn("px-3 py-1.5 text-xs border-l border-line-strong hover:bg-bone-200 uppercase", view === "agenda" && "bg-ink text-bone hover:bg-ink")}
+              className={cn("rounded-full px-3 py-1.5 text-sm font-medium hover:bg-bone-200", view === "agenda" && "bg-ink text-bone hover:bg-ink")}
             >
               Agenda
             </button>
           </div>
-          <span className="font-display text-lg tracking-tight uppercase">{formattedMonthYear}</span>
+          <span className="font-display text-2xl tracking-tight">{formattedMonthYear}</span>
         </div>
 
         <div className="flex items-center gap-2">
@@ -135,10 +135,10 @@ export function Calendar({ events = [], onEventClick }) {
 
       {/* 1. Month View */}
       {view === "month" && (
-        <div className="grid grid-cols-7 border-t border-l border-line-strong">
+        <div className="grid grid-cols-7 overflow-hidden rounded-[22px] border border-line-strong bg-white">
           {/* Days Headers */}
           {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(d => (
-            <div key={d} className="p-3 text-center border-r border-b border-line-strong bg-bone-100 font-mono text-[10px] text-ink/60 uppercase tracking-widest">
+            <div key={d} className="p-3 text-center border-r border-b border-line-strong bg-bone-100 text-[11px] font-semibold text-ink/55">
               {d}
             </div>
           ))}
@@ -150,7 +150,7 @@ export function Calendar({ events = [], onEventClick }) {
               <div
                 key={i}
                 className={cn(
-                  "min-h-[100px] p-2 border-r border-b border-line-strong bg-paper flex flex-col justify-between transition-colors",
+                  "min-h-[100px] p-2 border-r border-b border-line-strong bg-white flex flex-col justify-between transition-colors",
                   !isCurrentMonth && "bg-bone-50/50 text-ink/30",
                   isToday && "bg-accent/[0.02]"
                 )}
@@ -163,7 +163,7 @@ export function Calendar({ events = [], onEventClick }) {
                     <div
                       key={idx}
                       onClick={() => onEventClick && onEventClick(e)}
-                      className="text-[9px] font-mono p-1 border border-line-strong bg-bone truncate cursor-pointer hover:bg-accent hover:text-bone hover:border-accent transition-colors uppercase tracking-tight"
+                      className="rounded-lg text-[10px] font-medium p-1.5 border border-line-strong bg-bone truncate cursor-pointer hover:bg-accent hover:text-bone hover:border-accent transition-colors"
                       title={e.title || e.company}
                     >
                       {e.time ? `${e.time.split(" ")[0]} ` : ""}{e.title || e.company}
@@ -178,7 +178,7 @@ export function Calendar({ events = [], onEventClick }) {
 
       {/* 2. Week View */}
       {view === "week" && (
-        <div className="grid grid-cols-7 border-t border-l border-line-strong">
+        <div className="grid grid-cols-7 overflow-hidden rounded-[22px] border border-line-strong bg-white">
           {weekGrid.map((date, i) => {
             const dayEvents = getEventsForDate(date);
             const isToday = new Date().toDateString() === date.toDateString();
@@ -186,7 +186,7 @@ export function Calendar({ events = [], onEventClick }) {
               <div
                 key={i}
                 className={cn(
-                  "min-h-[300px] border-r border-b border-line-strong p-3 flex flex-col bg-paper",
+                  "min-h-[300px] border-r border-b border-line-strong p-3 flex flex-col bg-white",
                   isToday && "bg-accent/[0.01]"
                 )}
               >
@@ -203,7 +203,7 @@ export function Calendar({ events = [], onEventClick }) {
                     <div
                       key={idx}
                       onClick={() => onEventClick && onEventClick(e)}
-                      className="border border-line-strong p-2.5 bg-bone hover:bg-ink hover:text-bone hover:border-ink transition-colors cursor-pointer group"
+                      className="rounded-2xl border border-line-strong p-2.5 bg-bone hover:bg-ink hover:text-bone hover:border-ink transition-colors cursor-pointer group"
                     >
                       <div className="font-display text-[11px] leading-tight uppercase font-semibold">
                         {e.title || e.company}
@@ -232,7 +232,7 @@ export function Calendar({ events = [], onEventClick }) {
 
       {/* 3. Agenda View */}
       {view === "agenda" && (
-        <div className="border border-line-strong divide-y divide-line-strong bg-paper">
+        <div className="overflow-hidden rounded-[22px] border border-line-strong divide-y divide-line-strong bg-white">
           {events.length === 0 ? (
             <div className="p-8 text-center text-xs font-mono text-ink/40">
               NO SCHEDULED EVENTS FOUND.
@@ -249,7 +249,7 @@ export function Calendar({ events = [], onEventClick }) {
                     className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 hover:bg-bone-50 transition-colors cursor-pointer"
                   >
                     <div className="flex items-start gap-4">
-                      <div className="bg-bone-200 border border-line-strong p-3 text-center min-w-[70px] font-mono">
+                      <div className="rounded-2xl bg-bone-200 border border-line-strong p-3 text-center min-w-[70px]">
                         <div className="text-[10px] text-ink/50 uppercase tracking-widest">
                           {date.toLocaleDateString("en-US", { weekday: "short" })}
                         </div>

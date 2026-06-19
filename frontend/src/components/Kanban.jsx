@@ -29,15 +29,15 @@ export function Kanban({
   }, [items, columns]);
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-3 overflow-x-auto pb-4">
+    <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 overflow-x-auto pb-4">
       {columns.map(col => {
         const colItems = groupedItems[col] || [];
         return (
-          <div key={col} className="bg-bone-100/60 border border-line-strong p-3 min-w-[200px] flex flex-col min-h-[480px]">
+          <div key={col} className="rounded-[26px] bg-white/62 border border-line p-3 min-w-[220px] flex flex-col min-h-[480px] shadow-[0_18px_45px_-35px_rgba(23,25,28,0.45)]">
             {/* Column Header */}
-            <div className="flex items-center justify-between border-b border-line-strong pb-2 mb-3">
-              <span className="font-mono text-xs font-bold tracking-widest uppercase text-ink/75">{col}</span>
-              <span className="font-mono text-[10px] bg-bone-300 border border-line-strong px-2 py-0.5">{colItems.length}</span>
+            <div className="flex items-center justify-between pb-3 mb-3">
+              <span className="text-sm font-semibold text-ink/75">{col}</span>
+              <span className="rounded-full bg-bone-200 border border-line px-2.5 py-1 text-[11px] font-semibold">{colItems.length}</span>
             </div>
 
             {/* Column Cards */}
@@ -46,11 +46,11 @@ export function Kanban({
                 <div
                   key={item._id || item.id}
                   onClick={() => onItemClick && onItemClick(item)}
-                  className="editorial p-4 hover:border-ink hover:shadow-sm cursor-pointer transition-all bg-paper group relative"
+                  className="dashboard-card p-4 hover:border-ink hover:shadow-sm cursor-pointer transition-all bg-white group relative"
                 >
                   <div className="space-y-2">
                     <div className="flex items-baseline justify-between gap-1">
-                      <div className="font-display text-sm font-semibold tracking-tight uppercase group-hover:text-accent transition-colors truncate">
+                      <div className="font-display text-lg leading-tight group-hover:text-accent transition-colors truncate">
                         {item.student_name || item.name || "Student"}
                       </div>
                       <Badge variant="outline" className="text-[8px] px-1 py-0.2 shrink-0">
@@ -58,7 +58,7 @@ export function Kanban({
                       </Badge>
                     </div>
 
-                    <div className="text-[11px] text-ink-500 font-serif flex items-center gap-1">
+                    <div className="text-[12px] text-ink-500 flex items-center gap-1">
                       <Briefcase size={10} className="opacity-40" /> {item.job_title || item.company || "Job Drive"}
                     </div>
 
@@ -83,7 +83,7 @@ export function Kanban({
                               e.stopPropagation();
                               onStageChange(item, nextCol);
                             }}
-                            className="p-1 hover:bg-bone-200 border border-line-strong hover:border-ink text-[8px] font-mono uppercase tracking-wider flex items-center gap-0.5"
+                        className="rounded-full px-2 py-1 hover:bg-bone-200 border border-line-strong hover:border-ink text-[10px] font-medium flex items-center gap-0.5"
                           >
                             {nextCol.slice(0, 3)} <ArrowRight size={8} />
                           </button>
@@ -94,7 +94,7 @@ export function Kanban({
               ))}
 
               {colItems.length === 0 && (
-                <div className="text-[10px] font-mono text-ink/30 text-center py-12 border border-dashed border-line">
+                <div className="rounded-[20px] text-[11px] font-medium text-ink/30 text-center py-12 border border-dashed border-line">
                   DRAG OR UPDATE ITEMS HERE
                 </div>
               )}

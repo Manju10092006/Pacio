@@ -10,6 +10,7 @@ import os
 import io
 import uuid
 import logging
+import time
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional, Literal, Any
@@ -44,7 +45,7 @@ from reports import (
     students_csv, applications_csv, placements_csv, build_ics,
 )
 from ai_service import ai_interview_feedback, ai_ats_score
-from intelligence_engine import build_readiness_roster, build_student_readiness
+from intelligence_engine import READINESS_WEIGHTS, build_readiness_roster, build_student_readiness
 from ws_manager import manager as ws_manager
 from fastapi import WebSocket, WebSocketDisconnect
 from memory_db import MemoryDB, MemoryGridFS
@@ -84,6 +85,19 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"], allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def production_headers(request: Request, call_next):
+    started = time.perf_counter()
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+    response.headers.setdefault("X-CareerOS-Release", "v3")
+    response.headers.setdefault("X-Response-Time-Ms", str(round((time.perf_counter() - started) * 1000, 2)))
+    return response
 
 # ============== MODELS ==============
 class LoginBody(BaseModel):
@@ -248,7 +262,182 @@ def _pipeline_counts(items: list[dict]) -> dict[str, int]:
     return stages
 
 
-async def _institution_operating_data(iid: str, *, department: Optional[str] = None, readiness_limit: int = 1000) -> dict:
+def _score_band(score: float) -> dict[str, str]:
+    if score >= 85:
+        return {"code": "placement_ready", "label": "Placement ready"}
+    if score >= 72:
+        return {"code": "nearly_ready", "label": "Nearly ready"}
+    if score >= 58:
+        return {"code": "developing", "label": "Developing"}
+    return {"code": "needs_intervention", "label": "Needs intervention"}
+
+
+def _component_status(score: float) -> str:
+    if score >= 80:
+        return "strong"
+    if score >= 65:
+        return "on_track"
+    if score >= 50:
+        return "watch"
+    return "critical"
+
+
+def _clamp_score(value: float) -> float:
+    return max(0, min(100, float(value or 0)))
+
+
+async def _batch_readiness_summary(
+    iid: str,
+    *,
+    department: Optional[str] = None,
+    limit: int = 1200,
+) -> dict:
+    """Bulk readiness summary for executive analytics without per-student query fan-out."""
+    query: dict[str, Any] = {"institution_id": iid}
+    if department:
+        query["department"] = department
+    safe_limit = max(1, min(limit, 1500))
+    students = await db.students.find(query, {"_id": 0}).limit(safe_limit).to_list(safe_limit)
+    sids = [student["student_id"] for student in students]
+    if not sids:
+        return {
+            "rows": [],
+            "avg_readiness": 0,
+            "placement_ready": 0,
+            "needs_intervention": 0,
+            "by_band": {},
+            "component_avgs": {key: 0 for key in READINESS_WEIGHTS},
+            "weak_students": [],
+            "institution_id": iid,
+            "department": department,
+        }
+
+    dsa_rows = await db.dsa_progress.find({"student_id": {"$in": sids}}, {"_id": 0}).to_list(20000)
+    aptitude_rows = await db.aptitude_scores.find({"student_id": {"$in": sids}}, {"_id": 0}).to_list(20000)
+    ats_rows = await db.ats_reports.find({"student_id": {"$in": sids}}, {"_id": 0}).to_list(10000)
+    interview_rows = await db.interview_reports.find({"student_id": {"$in": sids}}, {"_id": 0}).to_list(10000)
+    application_rows = await db.applications.find({"student_id": {"$in": sids}}, {"_id": 0}).to_list(20000)
+
+    dsa_by_student: dict[str, dict[str, float]] = {}
+    for row in dsa_rows:
+        bucket = dsa_by_student.setdefault(row["student_id"], {"solved": 0, "total": 0})
+        bucket["solved"] += row.get("solved", 0) or 0
+        bucket["total"] += row.get("total", 0) or 0
+
+    aptitude_by_student: dict[str, list[dict]] = {}
+    for row in aptitude_rows:
+        aptitude_by_student.setdefault(row["student_id"], []).append(row)
+
+    ats_by_student: dict[str, dict] = {}
+    for row in sorted(ats_rows, key=lambda item: item.get("created_at") or "", reverse=True):
+        ats_by_student.setdefault(row["student_id"], row)
+
+    interviews_by_student: dict[str, list[dict]] = {}
+    for row in interview_rows:
+        interviews_by_student.setdefault(row["student_id"], []).append(row)
+
+    applications_by_student: dict[str, list[dict]] = {}
+    for row in application_rows:
+        applications_by_student.setdefault(row["student_id"], []).append(row)
+
+    rows = []
+    for student in students:
+        sid = student["student_id"]
+        dsa = dsa_by_student.get(sid, {})
+        dsa_score = (dsa.get("solved", 0) / max(1, dsa.get("total", 0))) * 100 if dsa else 0
+
+        aptitudes = aptitude_by_student.get(sid, [])
+        aptitude_score_avg = sum(row.get("score_pct", 0) or 0 for row in aptitudes) / max(1, len(aptitudes))
+        aptitude_accuracy = sum(row.get("accuracy_pct", 0) or 0 for row in aptitudes) / max(1, len(aptitudes))
+        aptitude_time = sum(row.get("avg_time_sec", 0) or 0 for row in aptitudes) / max(1, len(aptitudes))
+        speed_score = _clamp_score(100 - max(0, aptitude_time - 45) * 1.15) if aptitudes else 0
+        aptitude_score = (aptitude_score_avg * 0.65) + (aptitude_accuracy * 0.25) + (speed_score * 0.10)
+
+        latest_ats = ats_by_student.get(sid)
+        ats_score = latest_ats.get("score", 0) if latest_ats else student.get("ats_score", 0)
+
+        interviews = interviews_by_student.get(sid, [])
+        interview_scores = []
+        for row in interviews:
+            if row.get("overall_score") is not None:
+                interview_scores.append(row.get("overall_score") or 0)
+            else:
+                interview_scores.append(sum([
+                    row.get("confidence_score", 0) or 0,
+                    row.get("communication_score", 0) or 0,
+                    row.get("technical_score", 0) or 0,
+                ]) / 3)
+        interview_score = sum(interview_scores) / max(1, len(interview_scores))
+
+        cgpa_score = _clamp_score(((float(student.get("cgpa") or 0) - 5.0) / 5.0) * 100)
+        applications = applications_by_student.get(sid, [])
+        active_pillars = sum([bool(dsa), bool(aptitudes), bool(latest_ats), bool(interviews), bool(applications)])
+        active_applications = len([row for row in applications if row.get("stage") not in {"Rejected", "Selected"}])
+        consistency_score = _clamp_score((active_pillars / 5 * 65) + (active_applications * 12) + (len(applications) * 3))
+
+        component_scores = {
+            "dsa": _clamp_score(dsa_score),
+            "aptitude": _clamp_score(aptitude_score),
+            "ats": _clamp_score(ats_score),
+            "interview": _clamp_score(interview_score),
+            "cgpa": _clamp_score(cgpa_score),
+            "consistency": _clamp_score(consistency_score),
+        }
+        overall = round(sum(component_scores[key] * READINESS_WEIGHTS[key] for key in READINESS_WEIGHTS), 1)
+        band = _score_band(overall)
+        components = {
+            key: {"score": round(score, 1), "weight": READINESS_WEIGHTS[key], "status": _component_status(score)}
+            for key, score in component_scores.items()
+        }
+        rows.append({
+            "student_id": sid,
+            "name": student.get("name"),
+            "roll_number": student.get("roll_number"),
+            "department": student.get("department"),
+            "cgpa": student.get("cgpa"),
+            "placement": student.get("placement", {}),
+            "readiness_score": overall,
+            "readiness_band": band["code"],
+            "readiness_label": band["label"],
+            "components": components,
+            "risks": [
+                {"area": key, "severity": "high" if score < 45 else "medium", "score": round(score, 1)}
+                for key, score in component_scores.items()
+                if score < (55 if key == "cgpa" else 60)
+            ][:3],
+            "top_recommendations": [],
+        })
+
+    rows.sort(key=lambda row: row["readiness_score"], reverse=True)
+    scores = [row["readiness_score"] for row in rows]
+    by_band: dict[str, int] = {}
+    for row in rows:
+        by_band[row["readiness_band"]] = by_band.get(row["readiness_band"], 0) + 1
+    component_avgs = {
+        key: round(sum(row["components"][key]["score"] for row in rows) / max(1, len(rows)), 1)
+        for key in READINESS_WEIGHTS
+    }
+    weak_students = sorted(rows, key=lambda row: row["readiness_score"])[:10]
+    return {
+        "rows": rows[:200],
+        "avg_readiness": round(sum(scores) / max(1, len(scores)), 1),
+        "placement_ready": sum(1 for row in rows if row["readiness_score"] >= 72),
+        "needs_intervention": sum(1 for row in rows if row["readiness_score"] < 58),
+        "by_band": by_band,
+        "component_avgs": component_avgs,
+        "weak_students": weak_students,
+        "institution_id": iid,
+        "department": department,
+    }
+
+
+async def _institution_operating_data(
+    iid: str,
+    *,
+    department: Optional[str] = None,
+    readiness_limit: int = 1000,
+    fast_readiness: bool = False,
+) -> dict:
     inst = await db.institutions.find_one({"institution_id": iid}, {"_id": 0}) or {}
     student_query: dict[str, Any] = {"institution_id": iid}
     if department:
@@ -278,12 +467,15 @@ async def _institution_operating_data(iid: str, *, department: Optional[str] = N
         total = await db.students.count_documents({"institution_id": iid, "department": dept})
         dept_breakdown.append({"department": dept, "placed": placed, "total": total, "placement_rate": _pct(placed, total)})
 
-    readiness = await build_readiness_roster(
-        db,
-        institution_id=iid,
-        department=department,
-        limit=readiness_limit,
-    )
+    if fast_readiness:
+        readiness = await _batch_readiness_summary(iid, department=department, limit=readiness_limit)
+    else:
+        readiness = await build_readiness_roster(
+            db,
+            institution_id=iid,
+            department=department,
+            limit=readiness_limit,
+        )
 
     app_query: dict[str, Any] = {"institution_id": iid}
     if department:
@@ -680,6 +872,26 @@ async def _startup():
 @app.get("/api/health")
 async def health():
     return {"status": "ok", "service": "careeros-v2"}
+
+
+@app.get("/api/health/deep")
+async def deep_health():
+    checks = {
+        "database": "mongo" if MONGO_URL else "memory",
+        "students": await db.students.count_documents({}),
+        "institutions": await db.institutions.count_documents({}),
+        "recruiters": await db.recruiters.count_documents({}),
+        "jobs_open": await db.jobs.count_documents({"status": "open"}),
+        "frontend_build": FRONTEND_BUILD.exists(),
+    }
+    ready = checks["students"] > 0 and checks["institutions"] > 0 and checks["recruiters"] > 0
+    return {
+        "status": "ready" if ready else "degraded",
+        "service": "careeros-v3",
+        "release": "v3-phases-7-10",
+        "checks": checks,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
 
 
 # ============== PUBLIC ==============
@@ -1828,30 +2040,57 @@ async def training_completion(user=Depends(get_session_user)):
 # ============== CROSS-MODULE INTELLIGENCE ==============
 @app.get("/api/intelligence/modules")
 async def module_intelligence(user=Depends(require_roles("super_admin", "institution_admin", "tpo", "faculty"))):
-    placement = await placements_overview(user=user)
-    dsa = await dsa_intelligence(user=user)
+    role = user.get("role")
+    iid = user.get("institution_id") or "inst_kmit"
+    if role == "super_admin":
+        iid = "inst_kmit"
+    scoped_department = user.get("department") if role == "faculty" and user.get("department") else None
+    operating = await _institution_operating_data(
+        iid,
+        department=scoped_department,
+        readiness_limit=1500,
+        fast_readiness=True,
+    )
+    readiness = operating["readiness"]
+
+    student_query: dict[str, Any] = {"institution_id": iid}
+    if scoped_department:
+        student_query["department"] = scoped_department
+    scoped_students = await db.students.find(student_query, {"_id": 0, "student_id": 1}).to_list(1500)
+    scoped_sids = [student["student_id"] for student in scoped_students]
+    dsa_match: dict[str, Any] = {"institution_id": iid, "topic_code": {"$in": DSA_TOPIC_CODES}}
+    if scoped_department:
+        dsa_match["student_id"] = {"$in": scoped_sids}
+    dsa_rows = await db.dsa_progress.find(dsa_match, {"_id": 0}).to_list(20000)
     aptitude = await aptitude_intelligence(user=user)
     ats = await ats_intelligence(user=user)
     interviews = await interviews_intelligence(user=user)
     training = await training_completion(user=user)
 
     dsa_score = 0
-    if dsa.get("by_topic"):
-        topic_scores = []
-        for topic in dsa["by_topic"]:
-            denominator = max(1, (topic.get("students", 0) or 0) * (topic.get("total", 0) or 0))
-            topic_scores.append((topic.get("solved", 0) or 0) / denominator * 100)
+    if dsa_rows:
+        by_topic: dict[str, dict[str, int]] = {}
+        for row in dsa_rows:
+            bucket = by_topic.setdefault(row["topic_code"], {"solved": 0, "total": 0, "students": 0})
+            bucket["solved"] += row.get("solved", 0) or 0
+            bucket["total"] += row.get("total", 0) or 0
+            bucket["students"] += 1
+        topic_scores = [
+            (row["solved"] / max(1, row["total"])) * 100
+            for row in by_topic.values()
+        ]
         dsa_score = round(sum(topic_scores) / max(1, len(topic_scores)), 1)
+    dsa_leaders = len([row for row in dsa_rows if (row.get("solved", 0) or 0) >= 30])
 
     cards = [
         {
             "module": "Placement Intelligence",
             "code": "placements",
-            "score": placement["readiness"]["avg_readiness"],
-            "health": _health(placement["readiness"]["avg_readiness"]),
-            "primary": f"{placement['students_placed']}/{placement['students_total']} placed",
-            "risk": f"{placement['readiness']['needs_intervention']} readiness interventions",
-            "action": _module_action("placements", placement["readiness"]["avg_readiness"]),
+            "score": readiness["avg_readiness"],
+            "health": _health(readiness["avg_readiness"]),
+            "primary": f"{operating['students_placed']}/{operating['students_total']} placed",
+            "risk": f"{readiness['needs_intervention']} readiness interventions",
+            "action": _module_action("placements", readiness["avg_readiness"]),
             "to": "/tpo/outcomes" if user.get("role") == "tpo" else "/institution/departments",
         },
         {
@@ -1859,8 +2098,8 @@ async def module_intelligence(user=Depends(require_roles("super_admin", "institu
             "code": "dsa",
             "score": dsa_score,
             "health": _health(dsa_score),
-            "primary": f"{dsa.get('total_problems', DSA_TOTAL)} A2Z questions",
-            "risk": f"{len(dsa.get('leaderboard', []))} leaders tracked",
+            "primary": f"{DSA_TOTAL} A2Z questions",
+            "risk": f"{dsa_leaders} leaders tracked",
             "action": _module_action("dsa", dsa_score),
             "to": "/faculty/dsa" if user.get("role") == "faculty" else "/tpo/dsa",
         },
@@ -1916,11 +2155,15 @@ async def module_intelligence(user=Depends(require_roles("super_admin", "institu
         if card["health"] in {"critical", "watch"}
     ][:6]
     return {
-        "scope": dsa.get("scope", "institution"),
+        "scope": f"department:{scoped_department}" if scoped_department else "institution",
         "cards": cards,
         "critical_alerts": critical_alerts,
         "recommendations": (
-            placement.get("recommendations", [])
+            [{
+                "area": "placement_readiness",
+                "action": f"Move {readiness.get('needs_intervention', 0)} readiness interventions into owned cohorts.",
+                "severity": "high" if readiness.get("needs_intervention", 0) else "medium",
+            }]
             + aptitude.get("recommendations", [])
             + ats.get("recommendations", [])
             + interviews.get("recommendations", [])
@@ -1928,6 +2171,205 @@ async def module_intelligence(user=Depends(require_roles("super_admin", "institu
         )[:10],
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
+
+
+def _delta_pct(current: float, previous: float) -> float:
+    if not previous:
+        return 0
+    return round(((current - previous) / previous) * 100, 1)
+
+
+def _funnel_action(stage: str, leakage: float) -> str:
+    if stage == "Applied":
+        return "Tighten eligibility screening and publish clearer role-fit criteria."
+    if stage == "Shortlisted":
+        return "Move shortlist rows into assessment or interview slots within 48 hours."
+    if stage == "Assessment":
+        return "Add aptitude and coding prep boosters for assessment-stage drop-off."
+    if stage == "Interview":
+        return "Run recruiter-specific mock interviews and interviewer calibration."
+    if stage == "Selected":
+        return "Convert selected rows into offer records and package intelligence."
+    if leakage >= 35:
+        return "Open a review with TPO, faculty owner, and recruiter owner."
+    return "Monitor stage movement and remove aging rows."
+
+
+async def _analytics_engine_payload(user: dict, department: Optional[str] = None) -> dict:
+    role = user.get("role")
+    iid = user.get("institution_id") or "inst_kmit"
+    if role == "super_admin":
+        iid = "inst_kmit"
+    scoped_department = user.get("department") if role == "faculty" and user.get("department") else department
+
+    operating = await _institution_operating_data(
+        iid,
+        department=scoped_department,
+        readiness_limit=1500,
+        fast_readiness=True,
+    )
+    readiness = operating["readiness"]
+    years = operating["year_summaries"]
+    latest = years[0] if years else {}
+    previous = years[1] if len(years) > 1 else {}
+    training = await training_completion(user=user)
+
+    placement_score = operating["placement_rate"]
+    readiness_score = readiness.get("avg_readiness", 0)
+    training_score = training["summary"]["avg_completion"]
+    funnel = operating["pipeline"]
+    active_pipeline = funnel.get("Applied", 0) + funnel.get("Shortlisted", 0) + funnel.get("Assessment", 0) + funnel.get("Interview", 0)
+    conversion = _pct(funnel.get("Selected", 0), max(1, sum(funnel.values())), 1)
+    command_score = round((placement_score * 0.28) + (readiness_score * 0.34) + (training_score * 0.20) + (conversion * 0.18), 1)
+
+    stage_order = ["Applied", "Shortlisted", "Assessment", "Interview", "Selected", "Rejected"]
+    funnel_rows = []
+    prior_count = None
+    for stage in stage_order:
+        count = funnel.get(stage, 0)
+        leakage = 0 if prior_count in (None, 0) else round(max(0, 1 - (count / prior_count)) * 100, 1)
+        funnel_rows.append({
+            "stage": stage,
+            "count": count,
+            "share": _pct(count, max(1, sum(funnel.values())), 1),
+            "conversion_from_previous": 100 if prior_count in (None, 0) else round(min(100, (count / prior_count) * 100), 1),
+            "leakage": leakage,
+            "action": _funnel_action(stage, leakage),
+        })
+        if stage != "Rejected":
+            prior_count = count
+
+    department_health = []
+    for dept in operating["department_breakdown"]:
+        dept_readiness = await _batch_readiness_summary(iid, department=dept["department"], limit=500)
+        placed_rate = dept.get("placement_rate", 0)
+        ready_avg = dept_readiness.get("avg_readiness", 0)
+        health_score = round((placed_rate * 0.45) + (ready_avg * 0.45) + (training_score * 0.10), 1)
+        department_health.append({
+            "department": dept["department"],
+            "placement_rate": placed_rate,
+            "placed": dept.get("placed", 0),
+            "total": dept.get("total", 0),
+            "readiness_avg": ready_avg,
+            "ready_students": dept_readiness.get("placement_ready", 0),
+            "interventions": dept_readiness.get("needs_intervention", 0),
+            "health_score": health_score,
+            "health": _health(health_score),
+        })
+    department_health.sort(key=lambda row: row["health_score"])
+
+    trend = []
+    for index, year in enumerate(reversed(years)):
+        prior = list(reversed(years))[index - 1] if index else {}
+        trend.append({
+            "academic_year": year.get("academic_year"),
+            "offers": year.get("offers", 0),
+            "companies": year.get("companies", 0),
+            "avg_lpa": year.get("avg_lpa", 0),
+            "top_offer_lpa": year.get("top_offer_lpa", 0),
+            "offer_delta_pct": _delta_pct(year.get("offers", 0), prior.get("offers", 0)),
+            "company_delta_pct": _delta_pct(year.get("companies", 0), prior.get("companies", 0)),
+        })
+
+    risk_register = []
+    if readiness.get("needs_intervention", 0):
+        risk_register.append({
+            "risk": "Readiness intervention load",
+            "severity": "high" if readiness.get("needs_intervention", 0) >= 40 else "medium",
+            "signal": f"{readiness.get('needs_intervention', 0)} students need intervention",
+            "owner": "Faculty + TPO",
+            "action": "Assign cohort owners to the lowest readiness band this week.",
+        })
+    for dept in department_health[:3]:
+        if dept["health"] in {"critical", "watch"}:
+            risk_register.append({
+                "risk": f"{dept['department']} department health",
+                "severity": "high" if dept["health"] == "critical" else "medium",
+                "signal": f"{dept['placement_rate']}% placed, {dept['readiness_avg']}/100 readiness",
+                "owner": "Department faculty",
+                "action": "Run department-specific placement clinic and recruiter matching.",
+            })
+    worst_funnel = max(funnel_rows[:-1], key=lambda row: row["leakage"], default=None)
+    if worst_funnel and worst_funnel["leakage"] >= 25:
+        risk_register.append({
+            "risk": "Application funnel leakage",
+            "severity": "high" if worst_funnel["leakage"] >= 45 else "medium",
+            "signal": f"{worst_funnel['leakage']}% leakage around {worst_funnel['stage']}",
+            "owner": "TPO operations",
+            "action": worst_funnel["action"],
+        })
+
+    open_capacity = sum(job.get("openings", 0) or 0 for job in operating["open_jobs"])
+    forecast_offers = int(round((latest.get("offers", 0) or operating["students_placed"]) + open_capacity * 0.12 + funnel.get("Interview", 0) * 0.3))
+    forecast_confidence = "high" if active_pipeline >= 75 and open_capacity >= 50 else "medium" if active_pipeline >= 30 else "low"
+    recommendations = [
+        {
+            "title": "Protect the conversion path",
+            "body": worst_funnel["action"] if worst_funnel else "Keep weekly stage aging reviews in place.",
+            "priority": "high" if worst_funnel and worst_funnel["leakage"] >= 35 else "medium",
+            "to": "/tpo/applications" if role == "tpo" else "/institution/departments",
+        },
+        {
+            "title": "Move low-readiness students into owned cohorts",
+            "body": f"{readiness.get('needs_intervention', 0)} learners need a named faculty intervention owner.",
+            "priority": "high" if readiness.get("needs_intervention", 0) >= 40 else "medium",
+            "to": "/tpo/roster" if role == "tpo" else "/faculty/roster",
+        },
+        {
+            "title": "Prepare board packet",
+            "body": "Export the leadership packet after reviewing forecast confidence and department health.",
+            "priority": "medium",
+            "to": "/tpo/reports" if role == "tpo" else "/institution/reports",
+        },
+    ]
+
+    return {
+        "scope": {
+            "institution_id": iid,
+            "institution": operating["institution"].get("short_name") or operating["institution"].get("name"),
+            "department": scoped_department,
+            "role": role,
+        },
+        "summary": {
+            "command_score": command_score,
+            "health": _health(command_score),
+            "placement_rate": placement_score,
+            "readiness_avg": readiness_score,
+            "training_avg": training_score,
+            "conversion_rate": conversion,
+            "active_pipeline": active_pipeline,
+            "offers_latest": latest.get("offers", 0),
+            "offers_delta_pct": _delta_pct(latest.get("offers", 0), previous.get("offers", 0)),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+        },
+        "kpis": [
+            {"label": "Command score", "value": command_score, "unit": "/100", "health": _health(command_score), "question": "Can leadership trust the current operating rhythm?"},
+            {"label": "Forecasted offers", "value": forecast_offers, "unit": "", "health": forecast_confidence, "question": "Where do we land if current pipeline converts?"},
+            {"label": "Funnel conversion", "value": conversion, "unit": "%", "health": _health(conversion), "question": "How efficiently does demand become selection?"},
+            {"label": "Intervention load", "value": readiness.get("needs_intervention", 0), "unit": "", "health": "watch" if readiness.get("needs_intervention", 0) else "strong", "question": "How much faculty work is required now?"},
+        ],
+        "trend": trend,
+        "funnel": funnel_rows,
+        "department_health": department_health,
+        "forecast": {
+            "forecasted_offers": forecast_offers,
+            "confidence": forecast_confidence,
+            "open_capacity": open_capacity,
+            "interview_stage": funnel.get("Interview", 0),
+            "previous_offers": previous.get("offers", 0),
+            "latest_offers": latest.get("offers", 0),
+        },
+        "risk_register": risk_register[:8],
+        "recommendations": recommendations,
+    }
+
+
+@app.get("/api/analytics/engine")
+async def analytics_engine(
+    department: Optional[str] = None,
+    user=Depends(require_roles("super_admin", "institution_admin", "tpo", "faculty")),
+):
+    return await _analytics_engine_payload(user, department=department)
 
 
 # ============== APPLICATIONS / JOBS ==============
@@ -2469,6 +2911,76 @@ async def admin_colleges(admin=Depends(require_roles("super_admin"))):
 
 
 # ============== REPORTS (PDF + CSV) ==============
+REPORT_MANIFEST = [
+    {
+        "report_id": "placement_pdf",
+        "title": "Placement board report",
+        "kind": "pdf",
+        "audience": "Board / leadership",
+        "cadence": "Weekly during drive season",
+        "href": "/reports/placement.pdf",
+        "file": "placement-report.pdf",
+        "decision": "Are offers, CTC, departments, and recruiters moving in the right direction?",
+        "phase": "Phase 8",
+    },
+    {
+        "report_id": "training_pdf",
+        "title": "Training intervention report",
+        "kind": "pdf",
+        "audience": "TPO / faculty",
+        "cadence": "Twice per week",
+        "href": "/reports/training.pdf",
+        "file": "training-report.pdf",
+        "decision": "Which cohorts need faculty action before the next drive?",
+        "phase": "Phase 8",
+    },
+    {
+        "report_id": "department_pdf",
+        "title": "Department health report",
+        "kind": "pdf",
+        "audience": "HOD / institution admin",
+        "cadence": "Weekly",
+        "href": "/reports/department.pdf",
+        "file": "department-report.pdf",
+        "decision": "Which department is underperforming and why?",
+        "phase": "Phase 8",
+    },
+    {
+        "report_id": "students_csv",
+        "title": "Student intelligence export",
+        "kind": "csv",
+        "audience": "Ops / downstream tooling",
+        "cadence": "On demand",
+        "href": "/reports/students.csv",
+        "file": "students.csv",
+        "decision": "Which students should move into action lists?",
+        "phase": "Phase 8",
+    },
+    {
+        "report_id": "applications_csv",
+        "title": "Application pipeline export",
+        "kind": "csv",
+        "audience": "TPO / recruiters",
+        "cadence": "Daily during drives",
+        "href": "/reports/applications.csv",
+        "file": "applications.csv",
+        "decision": "Where are applications stuck?",
+        "phase": "Phase 8",
+    },
+    {
+        "report_id": "placements_csv",
+        "title": "Placement ledger export",
+        "kind": "csv",
+        "audience": "Analytics / audit",
+        "cadence": "Monthly",
+        "href": "/reports/placements.csv",
+        "file": "placements.csv",
+        "decision": "Which recruiter relationships compound over time?",
+        "phase": "Phase 8",
+    },
+]
+
+
 def _stream(content: io.BytesIO, filename: str, media_type: str):
     content.seek(0)
     return StreamingResponse(
@@ -2476,6 +2988,48 @@ def _stream(content: io.BytesIO, filename: str, media_type: str):
         media_type=media_type,
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@app.get("/api/reports/manifest")
+async def reports_manifest(user=Depends(require_roles("super_admin", "institution_admin", "tpo", "faculty"))):
+    analytics = await _analytics_engine_payload(user)
+    exports_generated = await db.audit_logs.count_documents({"event": {"$in": [
+        "report.placement_exported",
+        "report.training_exported",
+        "report.department_exported",
+        "report.csv_exported",
+    ]}})
+    return {
+        "items": REPORT_MANIFEST,
+        "board_packet": {
+            "title": "CareerOS Intelligence Board Packet",
+            "status": "ready" if analytics["summary"]["health"] not in {"critical"} else "needs_review",
+            "command_score": analytics["summary"]["command_score"],
+            "forecasted_offers": analytics["forecast"]["forecasted_offers"],
+            "risk_count": len(analytics["risk_register"]),
+            "recommended_sequence": ["placement_pdf", "department_pdf", "training_pdf", "applications_csv"],
+        },
+        "usage": {
+            "exports_generated": exports_generated,
+            "last_generated_at": datetime.now(timezone.utc).isoformat(),
+        },
+    }
+
+
+@app.get("/api/reports/board-packet.json")
+async def reports_board_packet(user=Depends(require_roles("super_admin", "institution_admin", "tpo", "faculty"))):
+    analytics = await _analytics_engine_payload(user)
+    modules = await module_intelligence(user=user)
+    return {
+        "title": "CareerOS Intelligence Board Packet",
+        "scope": analytics["scope"],
+        "executive_summary": analytics["summary"],
+        "forecast": analytics["forecast"],
+        "risk_register": analytics["risk_register"],
+        "recommendations": analytics["recommendations"],
+        "module_health": modules["cards"],
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
 
 
 async def _institution_overview_for_reports(iid: str) -> dict:
@@ -2500,16 +3054,17 @@ async def _institution_overview_for_reports(iid: str) -> dict:
 
 
 @app.get("/api/reports/placement.pdf")
-async def report_placement_pdf(user=Depends(get_session_user)):
+async def report_placement_pdf(request: Request, user=Depends(get_session_user)):
     iid = user.get("institution_id") or "inst_kmit"
     inst = await db.institutions.find_one({"institution_id": iid}, {"_id": 0}) or {}
     overview = await _institution_overview_for_reports(iid)
     pdf = placement_report_pdf(inst, overview)
+    await _audit_log("report.placement_exported", user=user, institution_id=iid, resource="report", resource_id="placement_pdf", request=request)
     return _stream(pdf, f"placement-report-{inst.get('short_name', 'institution')}.pdf", "application/pdf")
 
 
 @app.get("/api/reports/training.pdf")
-async def report_training_pdf(user=Depends(get_session_user)):
+async def report_training_pdf(request: Request, user=Depends(get_session_user)):
     iid = user.get("institution_id") or "inst_kmit"
     inst = await db.institutions.find_one({"institution_id": iid}, {"_id": 0}) or {}
     pipeline = [{"$match": {"institution_id": iid}},
@@ -2532,21 +3087,23 @@ async def report_training_pdf(user=Depends(get_session_user)):
         s = smap.get(e["student_id"], {})
         e["student_name"] = s.get("name", "—"); e["roll_number"] = s.get("roll_number", "—"); e["department"] = s.get("department", "—")
     pdf = training_report_pdf(inst, {"by_program": by_program, "rows": enroll})
+    await _audit_log("report.training_exported", user=user, institution_id=iid, resource="report", resource_id="training_pdf", request=request)
     return _stream(pdf, f"training-report-{inst.get('short_name', 'institution')}.pdf", "application/pdf")
 
 
 @app.get("/api/reports/department.pdf")
-async def report_department_pdf(user=Depends(get_session_user)):
+async def report_department_pdf(request: Request, user=Depends(get_session_user)):
     iid = user.get("institution_id") or "inst_kmit"
     inst = await db.institutions.find_one({"institution_id": iid}, {"_id": 0}) or {}
     overview = await _institution_overview_for_reports(iid)
     students = await db.students.find({"institution_id": iid}, {"_id": 0}).to_list(1000)
     pdf = department_report_pdf(inst, overview, students)
+    await _audit_log("report.department_exported", user=user, institution_id=iid, resource="report", resource_id="department_pdf", request=request)
     return _stream(pdf, f"department-report-{inst.get('short_name', 'institution')}.pdf", "application/pdf")
 
 
 @app.get("/api/reports/students.csv")
-async def report_students_csv(department: Optional[str] = None, user=Depends(get_session_user)):
+async def report_students_csv(request: Request, department: Optional[str] = None, user=Depends(get_session_user)):
     iid = user.get("institution_id") or "inst_kmit"
     if user["role"] == "super_admin":
         iid = "inst_kmit"
@@ -2555,22 +3112,25 @@ async def report_students_csv(department: Optional[str] = None, user=Depends(get
         q["department"] = department
     items = await db.students.find(q, {"_id": 0}).to_list(2000)
     buf = students_csv(items)
+    await _audit_log("report.csv_exported", user=user, institution_id=iid, resource="report", resource_id="students_csv", metadata={"rows": len(items)}, request=request)
     return _stream(buf, "students.csv", "text/csv")
 
 
 @app.get("/api/reports/applications.csv")
-async def report_applications_csv(user=Depends(get_session_user)):
+async def report_applications_csv(request: Request, user=Depends(get_session_user)):
     iid = user.get("institution_id") or "inst_kmit"
     items = await db.applications.find({"institution_id": iid}, {"_id": 0}).to_list(2000)
     buf = applications_csv(items)
+    await _audit_log("report.csv_exported", user=user, institution_id=iid, resource="report", resource_id="applications_csv", metadata={"rows": len(items)}, request=request)
     return _stream(buf, "applications.csv", "text/csv")
 
 
 @app.get("/api/reports/placements.csv")
-async def report_placements_csv(user=Depends(get_session_user)):
+async def report_placements_csv(request: Request, user=Depends(get_session_user)):
     iid = user.get("institution_id") or "inst_kmit"
     records = await db.placement_records.find({"institution_id": iid}, {"_id": 0}).to_list(2000)
     buf = placements_csv(records)
+    await _audit_log("report.csv_exported", user=user, institution_id=iid, resource="report", resource_id="placements_csv", metadata={"rows": len(records)}, request=request)
     return _stream(buf, "placements.csv", "text/csv")
 
 

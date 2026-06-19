@@ -62,6 +62,17 @@ def test_health():
     r = requests.get(f"{API}/health")
     assert r.status_code == 200
     assert r.json()["status"] == "ok"
+    assert "X-CareerOS-Release" in r.headers
+
+
+def test_deep_health():
+    r = requests.get(f"{API}/health/deep")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["status"] in {"ready", "degraded"}
+    assert data["release"] == "v3-phases-7-10"
+    assert data["checks"]["students"] > 0
+    assert data["checks"]["institutions"] > 0
 
 
 def test_public_landing_stats():
@@ -288,6 +299,18 @@ def test_cross_module_intelligence(tpo_session):
     assert isinstance(d["recommendations"], list)
 
 
+def test_analytics_engine(tpo_session):
+    r = tpo_session.get(f"{API}/analytics/engine")
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert d["summary"]["command_score"] >= 0
+    assert len(d["kpis"]) == 4
+    assert len(d["funnel"]) == 6
+    assert isinstance(d["department_health"], list)
+    assert isinstance(d["risk_register"], list)
+    assert "forecasted_offers" in d["forecast"]
+
+
 # ---------- placements ----------
 def test_placements_overview(tpo_session):
     r = tpo_session.get(f"{API}/placements/overview")
@@ -299,6 +322,22 @@ def test_placements_overview(tpo_session):
     dept_names = {x["department"] for x in d["department_breakdown"]}
     expected_some = {"CSE", "IT", "ECE"}
     assert expected_some.issubset(dept_names) or len(dept_names) >= 3
+
+
+def test_reports_manifest_and_board_packet(tpo_session):
+    manifest = tpo_session.get(f"{API}/reports/manifest")
+    assert manifest.status_code == 200, manifest.text
+    data = manifest.json()
+    assert len(data["items"]) >= 6
+    assert data["board_packet"]["status"] in {"ready", "needs_review"}
+    assert "recommended_sequence" in data["board_packet"]
+
+    packet = tpo_session.get(f"{API}/reports/board-packet.json")
+    assert packet.status_code == 200, packet.text
+    body = packet.json()
+    assert body["title"] == "CareerOS Intelligence Board Packet"
+    assert "executive_summary" in body
+    assert isinstance(body["module_health"], list)
 
 
 # ---------- applications ----------

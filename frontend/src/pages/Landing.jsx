@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
-import { ArrowUpRight, ArrowRight, FileText, Users, Building2, Code2, Brain, MessageSquare, Send, BarChart3, GraduationCap } from "lucide-react";
+import { ArrowUpRight, ArrowRight, FileText, Users, Building2, Code2, Brain, MessageSquare, Send, BarChart3, GraduationCap, CalendarPlus, Megaphone, FileBarChart } from "lucide-react";
 import { api } from "../lib/api";
 
 gsap.registerPlugin(ScrollTrigger);
@@ -146,8 +146,8 @@ export default function Landing() {
       <section className="relative min-h-screen pt-28 pb-16 px-6 md:px-10 grain">
         <div className="max-w-[1440px] mx-auto relative">
           <div className="flex items-center gap-3 mb-10 reveal-up" data-testid="hero-eyebrow-row">
-            <span className="pill">v2 · KMIT pilot live · 6 institutions seeded</span>
-            <span className="font-mono text-[11px] text-ink-400 tracking-[0.18em]">SKILL TANK / CAMPUS OS</span>
+            <span className="pill">v3 / intelligence engine live / 7 institutions seeded</span>
+            <span className="font-mono text-[11px] text-ink-400 tracking-[0.18em]">CAREEROS / CAMPUS INTELLIGENCE</span>
           </div>
 
           <h1
@@ -196,7 +196,7 @@ export default function Landing() {
                 </div>
                 <div data-testid="hero-stat-inst">
                   <div className="font-mono text-[10px] tracking-[0.24em] text-ink-400">INSTITUTIONS</div>
-                  <div className="font-display text-5xl mt-2"><NumberTicker value={stats?.totals?.institutions || 6} /></div>
+                  <div className="font-display text-5xl mt-2"><NumberTicker value={stats?.totals?.institutions || 7} /></div>
                   <div className="text-sm text-ink-500 mt-1">across streams</div>
                 </div>
               </div>
@@ -285,6 +285,9 @@ export default function Landing() {
               { code: "08", title: "Recruiter Network", body: "Talent pool view, drive scheduling, hiring trends.", icon: Building2, span: "col-span-12 md:col-span-6" },
               { code: "09", title: "Training Ops", body: "CRT · FDP · Communication. Module-level completion, instructor accountability.", icon: GraduationCap, span: "col-span-12 md:col-span-3" },
               { code: "10", title: "MOU Vault", body: "Documents, renewal countdown, revenue share.", icon: FileText, span: "col-span-12 md:col-span-3" },
+              { code: "11", title: "Interview Scheduler", body: "Month, week and agenda views for drive coordination.", icon: CalendarPlus, span: "col-span-12 md:col-span-4" },
+              { code: "12", title: "Broadcast Engine", body: "Announcements, drive updates and training signals across roles.", icon: Megaphone, span: "col-span-12 md:col-span-4" },
+              { code: "13", title: "Reports Engine", body: "Board packets, CSV exports, audit logs and analytics snapshots.", icon: FileBarChart, span: "col-span-12 md:col-span-4" },
             ].map((m) => (
               <div key={m.code} data-testid={`module-${m.code}`}
                 className={`module-card opacity-0 ${m.span} border border-bone-100/15 hover:border-accent transition-colors p-6 flex flex-col justify-between relative overflow-hidden`}>

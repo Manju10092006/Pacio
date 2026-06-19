@@ -32,6 +32,7 @@ import Recruiters from "./pages/Recruiters";
 import Announcements from "./pages/Announcements";
 import PlatformControl from "./pages/PlatformControl";
 import Reports from "./pages/Reports";
+import AnalyticsWorkbench from "./pages/AnalyticsWorkbench";
 import InterviewSchedule from "./pages/InterviewSchedule";
 import TeamInvites from "./pages/TeamInvites";
 import RecruiterHome from "./pages/RecruiterHome";
@@ -119,6 +120,7 @@ function AppRouter() {
         <Route index element={<PlatformControl />} />
         <Route path="institutions" element={<AdminPanel />} />
         <Route path="recruiters" element={<Recruiters />} />
+        <Route path="analytics" element={<AnalyticsWorkbench />} />
         <Route path="placements" element={<Outcomes />} />
         <Route path="announcements" element={<Announcements />} />
       </Route>
@@ -129,6 +131,7 @@ function AppRouter() {
         <Route path="profile" element={<CollegeProfile />} />
         <Route path="departments" element={<Roster />} />
         <Route path="programs" element={<Cohorts />} />
+        <Route path="analytics" element={<AnalyticsWorkbench />} />
         <Route path="team" element={<TeamInvites />} />
         <Route path="mou" element={<MOU />} />
         <Route path="reports" element={<Reports />} />
@@ -141,6 +144,7 @@ function AppRouter() {
         <Route path="roster" element={<Roster />} />
         <Route path="cohorts" element={<Cohorts />} />
         <Route path="outcomes" element={<Outcomes />} />
+        <Route path="analytics" element={<AnalyticsWorkbench />} />
         <Route path="training" element={<Training />} />
         <Route path="dsa" element={<DSAIntelligence />} />
         <Route path="aptitude" element={<AptitudeIntelligence />} />
@@ -160,6 +164,7 @@ function AppRouter() {
       <Route path="/faculty" element={<Protected allow={["faculty", "super_admin"]}><RoleLayout {...roleConfig.faculty} /></Protected>}>
         <Route index element={<Overview />} />
         <Route path="roster" element={<Roster />} />
+        <Route path="analytics" element={<AnalyticsWorkbench />} />
         <Route path="dsa" element={<DSAIntelligence />} />
         <Route path="aptitude" element={<AptitudeIntelligence />} />
         <Route path="training" element={<Training />} />

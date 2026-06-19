@@ -14,6 +14,7 @@ export const roleConfig = {
         item("/platform/recruiters", "Recruiter network", Network, "recruiters"),
       ]},
       { title: "Intelligence", items: [
+        item("/platform/analytics", "Analytics engine", BarChart3, "analytics"),
         item("/platform/placements", "Placement layer", BarChart3, "placements"),
         item("/platform/announcements", "Broadcasts", Megaphone, "announcements"),
       ]},
@@ -31,6 +32,7 @@ export const roleConfig = {
         item("/institution/programs", "Training programs", Layers, "programs"),
       ]},
       { title: "Operations", items: [
+        item("/institution/analytics", "Analytics engine", BarChart3, "analytics"),
         item("/institution/team", "Team & invites", UserPlus, "team"),
         item("/institution/mou", "MOU vault", FileText, "mou"),
         item("/institution/reports", "Reports · exports", FileBarChart, "reports"),
@@ -45,6 +47,7 @@ export const roleConfig = {
     sections: [
       { title: "Command", items: [
         item("/tpo", "Mission control", LayoutDashboard, "overview"),
+        item("/tpo/analytics", "Analytics engine", BarChart3, "analytics"),
         item("/tpo/outcomes", "Placement outcomes", BarChart3, "outcomes"),
         item("/tpo/applications", "Application pipeline", Send, "applications"),
         item("/tpo/jobs", "Active drives", Briefcase, "jobs"),
@@ -81,6 +84,7 @@ export const roleConfig = {
         item("/faculty/training", "Training completion", GraduationCap, "training"),
       ]},
       { title: "Analytics", items: [
+        item("/faculty/analytics", "Analytics engine", BarChart3, "analytics"),
         item("/faculty/dsa", "DSA analytics", Code2, "dsa"),
         item("/faculty/aptitude", "Aptitude analytics", Brain, "aptitude"),
         item("/faculty/interviews", "Interview reports", MessageSquare, "interviews"),

@@ -4,14 +4,27 @@ import { ResponsiveContainer, LineChart, Line, Tooltip, XAxis, YAxis, CartesianG
 
 export default function Outcomes() {
   const [data, setData] = useState(null);
-  useEffect(() => { api.get("/placements/overview").then(({ data }) => setData(data)); }, []);
+  const [intelligence, setIntelligence] = useState(null);
+  useEffect(() => {
+    Promise.all([
+      api.get("/placements/overview"),
+      api.get("/placements/intelligence"),
+    ]).then(([overview, engine]) => {
+      setData(overview.data);
+      setIntelligence(engine.data);
+    });
+  }, []);
 
   const ctcTrend = [...(data?.year_summaries || [])].reverse().map((y) => ({
     year: y.academic_year,
     avg: y.avg_lpa,
     top: y.top_offer_lpa,
   }));
-  const forecast = data?.forecast || {};
+  const forecast = intelligence?.forecast || data?.forecast || {};
+  const funnel = intelligence?.placement_funnel || [];
+  const riskStudents = intelligence?.risk_students || [];
+  const recruiterConversions = intelligence?.recruiter_conversions || [];
+  const readinessTrends = intelligence?.readiness_trends || [];
 
   return (
     <div className="space-y-10">
@@ -37,6 +50,59 @@ export default function Outcomes() {
       </div>
 
       <div className="grid grid-cols-12 gap-6">
+        <div className="col-span-12 border border-line bg-bone-50 p-8" data-testid="placement-intelligence-engine">
+          <div className="num-mono text-[10px] tracking-[0.24em] text-ink-400">PLACEMENT INTELLIGENCE ENGINE</div>
+          <h3 className="font-display text-2xl tracking-tight mt-1">Forecast, funnel, and risk drill-down</h3>
+          <div className="grid grid-cols-12 gap-3 mt-6">
+            <div className="col-span-12 md:col-span-4">
+              <div className="text-sm font-medium mb-3">Placement funnel</div>
+              <div className="space-y-2">
+                {funnel.map((stage) => (
+                  <div key={stage.stage} className="grid grid-cols-12 items-center gap-3">
+                    <div className="col-span-4 text-xs text-ink-500">{stage.stage}</div>
+                    <div className="col-span-6 h-2 bg-bone-300">
+                      <div className="h-full bg-ink-900" style={{ width: `${Math.min(100, stage.share || stage.percent || 0)}%` }} />
+                    </div>
+                    <div className="col-span-2 text-right font-mono text-xs tnum">{stage.count}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="col-span-12 md:col-span-4">
+              <div className="text-sm font-medium mb-3">Risk students</div>
+              <div className="divide-y divide-line">
+                {riskStudents.slice(0, 5).map((student) => (
+                  <div key={student.student_id} className="py-2 grid grid-cols-12 gap-2 text-sm">
+                    <div className="col-span-7">
+                      <div className="font-medium">{student.name}</div>
+                      <div className="font-mono text-[10px] text-ink-400">{student.roll_number} / {student.department}</div>
+                    </div>
+                    <div className="col-span-3 text-right font-display tnum text-accent">{student.readiness_score}</div>
+                    <div className="col-span-2 text-right text-xs text-ink-500">{student.readiness_label || student.readiness_band}</div>
+                  </div>
+                ))}
+                {riskStudents.length === 0 && <div className="text-sm text-ink-400">No active placement risk in this scope.</div>}
+              </div>
+            </div>
+            <div className="col-span-12 md:col-span-4">
+              <div className="text-sm font-medium mb-3">Readiness trend</div>
+              <div className="space-y-2">
+                {readinessTrends.map((band) => (
+                  <div key={band.band}>
+                    <div className="flex justify-between text-xs text-ink-500">
+                      <span>{band.band}</span>
+                      <span className="font-mono tnum">{band.students} / {band.share}%</span>
+                    </div>
+                    <div className="mt-1 h-1.5 bg-bone-300">
+                      <div className="h-full bg-accent" style={{ width: `${band.share || 0}%` }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div className="col-span-12 md:col-span-8 border border-line bg-bone-50 p-8" data-testid="ctc-trend-card">
           <div className="num-mono text-[10px] tracking-[0.24em] text-ink-400">CTC TREND · AVG vs TOP OFFER</div>
           <h3 className="font-display text-2xl tracking-tight mt-1">Decade of compensation</h3>
@@ -96,6 +162,29 @@ export default function Outcomes() {
               </div>
             ))}
           </div>
+        </div>
+
+        <div className="col-span-12 border border-line bg-bone-50" data-testid="recruiter-conversion-engine">
+          <div className="p-8 border-b border-line">
+            <div className="num-mono text-[10px] tracking-[0.24em] text-ink-400">RECRUITER CONVERSION ANALYTICS</div>
+            <h3 className="font-display text-2xl tracking-tight mt-1">Which hiring partners are converting</h3>
+          </div>
+          <div className="grid grid-cols-12 px-8 py-3 border-b border-line num-mono text-[10px] tracking-[0.24em] text-ink-400">
+            <div className="col-span-4">COMPANY</div>
+            <div className="col-span-2 text-right">APPS</div>
+            <div className="col-span-2 text-right">INTERVIEWS</div>
+            <div className="col-span-2 text-right">SELECTED</div>
+            <div className="col-span-2 text-right">CONV</div>
+          </div>
+          {recruiterConversions.slice(0, 10).map((row) => (
+            <div key={row.company} className="grid grid-cols-12 px-8 py-3 border-b border-line items-center text-sm">
+              <div className="col-span-4 font-medium">{row.company}</div>
+              <div className="col-span-2 text-right font-mono tnum">{row.applications}</div>
+              <div className="col-span-2 text-right font-mono tnum">{row.interviews}</div>
+              <div className="col-span-2 text-right font-mono tnum">{row.selected}</div>
+              <div className="col-span-2 text-right font-display text-xl tnum text-accent">{row.conversion_rate}%</div>
+            </div>
+          ))}
         </div>
       </div>
     </div>

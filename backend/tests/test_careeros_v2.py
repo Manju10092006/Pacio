@@ -266,9 +266,46 @@ def test_role_workspace_contracts():
 def test_aptitude_intelligence(tpo_session):
     r = tpo_session.get(f"{API}/aptitude/intelligence")
     assert r.status_code == 200
-    sections = r.json()["by_section"]
+    data = r.json()
+    sections = data["by_section"]
     codes = {s["_id"] for s in sections}
     assert {"QUANT", "REASON", "VERBAL", "DI"}.issubset(codes)
+    assert "question_analytics" in data
+    assert isinstance(data["weak_topics"], list)
+    assert isinstance(data["speed_analysis"], list)
+    assert isinstance(data["accuracy_analysis"], list)
+
+
+def test_aptitude_question_tracking_and_analytics(tpo_session, student_session):
+    catalog = tpo_session.get(f"{API}/aptitude/questions")
+    assert catalog.status_code == 200, catalog.text
+    body = catalog.json()
+    assert body["total"] > 100
+    first = body["questions"][0]
+    assert {"question_id", "topic", "section", "difficulty"}.issubset(first.keys())
+
+    mine = student_session.get(f"{API}/me/aptitude/questions")
+    assert mine.status_code == 200, mine.text
+    data = mine.json()
+    assert data["total"] == body["total"]
+    assert len(data["questions"]) == body["total"]
+
+    patch = student_session.patch(
+        f"{API}/me/aptitude/questions/{first['question_id']}",
+        json={"attempted": True, "solved": True, "accuracy": 92, "average_time": 48, "mastery_score": 88},
+    )
+    assert patch.status_code == 200, patch.text
+    updated = patch.json()["question"]
+    assert updated["solved"] is True
+    assert updated["attempted"] is True
+    assert updated["mastery_score"] >= 80
+
+    analytics = tpo_session.get(f"{API}/aptitude/question-analytics")
+    assert analytics.status_code == 200, analytics.text
+    report = analytics.json()
+    assert isinstance(report["weak_topics"], list)
+    assert isinstance(report["priority_students"], list)
+    assert "summary" in report
 
 
 def test_ats_intelligence(tpo_session):
@@ -277,6 +314,28 @@ def test_ats_intelligence(tpo_session):
     d = r.json()
     assert d["avg_score"] > 0
     assert isinstance(d["rows"], list)
+    assert isinstance(d["resume_versions"], list)
+    assert isinstance(d["version_history"], list)
+    assert isinstance(d["skill_gaps"], list)
+    assert isinstance(d["recruiter_compatibility"], list)
+
+
+def test_ats_resume_versions_and_heatmap(tpo_session):
+    versions = tpo_session.get(f"{API}/ats/resume-versions")
+    assert versions.status_code == 200, versions.text
+    data = versions.json()
+    assert isinstance(data["items"], list)
+    assert data["count"] == len(data["items"])
+    if data["items"]:
+        first = data["items"][0]
+        assert {"resume_id", "version", "ats_score", "keyword_score", "recruiter_match_score"}.issubset(first.keys())
+
+    heatmap = tpo_session.get(f"{API}/ats/heatmap")
+    assert heatmap.status_code == 200, heatmap.text
+    body = heatmap.json()
+    assert isinstance(body["keyword_heatmap"], list)
+    assert isinstance(body["skill_gaps"], list)
+    assert isinstance(body["recruiter_compatibility"], list)
 
 
 def test_interviews_intelligence(tpo_session):
@@ -287,6 +346,22 @@ def test_interviews_intelligence(tpo_session):
     assert "avg_confidence" in d and "avg_technical" in d
     assert "rubric_avgs" in d
     assert isinstance(d["priority_students"], list)
+
+
+def test_interview_history_timeline(tpo_session, student_session):
+    staff = tpo_session.get(f"{API}/interviews/history")
+    assert staff.status_code == 200, staff.text
+    data = staff.json()
+    assert isinstance(data["items"], list)
+    assert isinstance(data["weak_area_detection"], list)
+    assert isinstance(data["improvement_tracking"], list)
+    if data["items"]:
+        first = data["items"][0]
+        assert {"student_id", "latest_score", "improvement", "weak_areas", "history"}.issubset(first.keys())
+
+    mine = student_session.get(f"{API}/interviews/history")
+    assert mine.status_code == 200, mine.text
+    assert isinstance(mine.json()["student_timeline"], list)
 
 
 def test_cross_module_intelligence(tpo_session):
@@ -322,6 +397,18 @@ def test_placements_overview(tpo_session):
     dept_names = {x["department"] for x in d["department_breakdown"]}
     expected_some = {"CSE", "IT", "ECE"}
     assert expected_some.issubset(dept_names) or len(dept_names) >= 3
+
+
+def test_placement_intelligence_engine(tpo_session):
+    r = tpo_session.get(f"{API}/placements/intelligence")
+    assert r.status_code == 200, r.text
+    data = r.json()
+    assert "forecast" in data
+    assert isinstance(data["placement_funnel"], list)
+    assert isinstance(data["department_analytics"], list)
+    assert isinstance(data["risk_students"], list)
+    assert isinstance(data["recruiter_conversions"], list)
+    assert isinstance(data["readiness_trends"], list)
 
 
 def test_reports_manifest_and_board_packet(tpo_session):
@@ -416,6 +503,44 @@ def test_recruiter_analytics(recruiter_session):
     assert isinstance(data["job_funnels"], list)
     assert isinstance(data["institution_funnel"], list)
     assert isinstance(data["action_queue"], list) and len(data["action_queue"]) > 0
+
+
+def test_recruiter_recommendations_shortlists_and_saved_filters(recruiter_session):
+    recs = recruiter_session.get(f"{API}/recruiters/me/recommendations")
+    assert recs.status_code == 200, recs.text
+    data = recs.json()
+    assert data["answer"] == "Which students should I interview next?"
+    assert isinstance(data["items"], list)
+    if data["items"]:
+        candidate = data["items"][0]
+        assert {"student_id", "job_id", "interview_next_score", "skill_match_score", "answer"}.issubset(candidate.keys())
+        create = recruiter_session.post(f"{API}/recruiters/me/shortlists", json={
+            "student_id": candidate["student_id"],
+            "job_id": candidate["job_id"],
+            "readiness_score": candidate["readiness_score"],
+            "match_score": candidate["interview_next_score"],
+            "notes": "Automated test shortlist",
+        })
+        assert create.status_code == 200, create.text
+        assert create.json()["student_id"] == candidate["student_id"]
+
+    shortlists = recruiter_session.get(f"{API}/recruiters/me/shortlists")
+    assert shortlists.status_code == 200, shortlists.text
+    assert isinstance(shortlists.json()["items"], list)
+
+    saved = recruiter_session.post(f"{API}/recruiters/me/saved-filters", json={
+        "name": f"TEST_filter_{uuid.uuid4().hex[:6]}",
+        "min_cgpa": 7.2,
+        "min_readiness": 68,
+        "department": "CSE",
+        "skill": "React",
+    })
+    assert saved.status_code == 200, saved.text
+    assert saved.json()["filters"]["department"] == "CSE"
+
+    filters = recruiter_session.get(f"{API}/recruiters/me/saved-filters")
+    assert filters.status_code == 200, filters.text
+    assert any(item["filter_id"] == saved.json()["filter_id"] for item in filters.json()["items"])
 
 
 def test_talent_pool_forbidden_for_tpo(tpo_session):

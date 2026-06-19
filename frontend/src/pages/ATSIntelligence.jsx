@@ -75,6 +75,39 @@ export default function ATSIntelligence() {
         </div>
       </div>
 
+      <div className="grid grid-cols-12 gap-3" data-testid="ats-versioning">
+        <div className="col-span-12 lg:col-span-5 editorial p-8 bg-ink-900 text-bone-100">
+          <div className="font-mono text-[10px] tracking-[0.24em] text-bone-100/40">RESUME VERSIONING</div>
+          <div className="font-display text-6xl tracking-tightest mt-3 text-accent">{d.resume_versions?.length || 0}</div>
+          <div className="text-sm text-bone-100/60 mt-2">versioned resume signals connected to readiness and recruiter compatibility.</div>
+          <div className="mt-6 space-y-3">
+            {(d.skill_gaps || []).slice(0, 4).map((gap) => (
+              <div key={gap.keyword} className="border-t border-bone-100/10 pt-3">
+                <div className="font-display text-lg">{gap.keyword}</div>
+                <div className="text-xs text-bone-100/50">{gap.suggestion}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="col-span-12 lg:col-span-7 editorial p-8">
+          <div className="font-mono text-[10px] tracking-[0.24em] text-ink-400">RECRUITER COMPATIBILITY</div>
+          <div className="mt-5 divide-y divide-line">
+            {(d.recruiter_compatibility || []).slice(0, 8).map((row) => (
+              <div key={`${row.student_id}-${row.latest_resume_id}`} className="grid grid-cols-12 gap-3 py-3 text-sm">
+                <div className="col-span-4">
+                  <div className="font-medium">{row.student_name}</div>
+                  <div className="font-mono text-[10px] text-ink-400">{row.roll_number} / v{row.latest_version}</div>
+                </div>
+                <div className="col-span-2 text-right font-display text-accent">{row.recruiter_match_score}</div>
+                <div className="col-span-2 text-right font-mono">{row.ats_score} ATS</div>
+                <div className="col-span-2 text-right font-mono">{row.keyword_score}% KW</div>
+                <div className="col-span-2 text-right text-xs text-ink-500">{row.score_delta >= 0 ? "+" : ""}{row.score_delta} delta</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
       <div className="editorial" data-testid="ats-rows">
         <div className="p-6 border-b border-line">
           <div className="font-mono text-[10px] tracking-[0.24em] text-ink-400">LATEST UPLOADS / TOP 40</div>

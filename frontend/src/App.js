@@ -132,6 +132,11 @@ function AppRouter() {
         <Route path="departments" element={<Roster />} />
         <Route path="programs" element={<Cohorts />} />
         <Route path="analytics" element={<AnalyticsWorkbench />} />
+        <Route path="outcomes" element={<Outcomes />} />
+        <Route path="dsa" element={<DSAIntelligence />} />
+        <Route path="aptitude" element={<AptitudeIntelligence />} />
+        <Route path="ats" element={<ATSIntelligence />} />
+        <Route path="interviews" element={<InterviewIntelligence />} />
         <Route path="team" element={<TeamInvites />} />
         <Route path="mou" element={<MOU />} />
         <Route path="reports" element={<Reports />} />
@@ -167,6 +172,7 @@ function AppRouter() {
         <Route path="analytics" element={<AnalyticsWorkbench />} />
         <Route path="dsa" element={<DSAIntelligence />} />
         <Route path="aptitude" element={<AptitudeIntelligence />} />
+        <Route path="ats" element={<ATSIntelligence />} />
         <Route path="training" element={<Training />} />
         <Route path="interviews" element={<InterviewIntelligence />} />
       </Route>
@@ -175,6 +181,9 @@ function AppRouter() {
       <Route path="/student" element={<Protected allow={["student"]}><RoleLayout {...roleConfig.student} /></Protected>}>
         <Route index element={<StudentHome />} />
         <Route path="dsa" element={<StudentDSA />} />
+        <Route path="aptitude" element={<AptitudeIntelligence />} />
+        <Route path="ats" element={<ATSIntelligence />} />
+        <Route path="interviews" element={<InterviewIntelligence />} />
         <Route path="applications" element={<Applications />} />
         <Route path="jobs" element={<Jobs />} />
         <Route path="schedule" element={<InterviewSchedule />} />

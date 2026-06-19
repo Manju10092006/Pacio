@@ -11,6 +11,7 @@ export default function AptitudeIntelligence() {
   if (!d) return <div className="font-mono text-xs text-ink-400">LOADING APTITUDE...</div>;
 
   const summary = d.summary || {};
+  const question = d.question_analytics || {};
 
   return (
     <div className="space-y-10">
@@ -44,6 +45,36 @@ export default function AptitudeIntelligence() {
             <div className="text-sm text-ink-500 mt-2">{card.sub}</div>
           </div>
         ))}
+      </div>
+
+      <div className="grid grid-cols-12 gap-3" data-testid="apt-question-analytics">
+        <div className="col-span-12 lg:col-span-5 editorial p-8 bg-ink-900 text-bone-100">
+          <div className="font-mono text-[10px] tracking-[0.24em] text-bone-100/40">QUESTION-LEVEL ENGINE</div>
+          <div className="font-display text-6xl tracking-tightest mt-3 tnum text-accent">{question.catalog_total || 0}</div>
+          <div className="text-sm text-bone-100/60 mt-2">tracked aptitude questions across quant, reasoning, verbal, and DI.</div>
+          <div className="grid grid-cols-3 gap-3 mt-6">
+            <div><div className="font-mono text-[10px] text-bone-100/40">WEAK</div><div className="font-display text-3xl">{question.weak_topics?.length || 0}</div></div>
+            <div><div className="font-mono text-[10px] text-bone-100/40">SPEED</div><div className="font-display text-3xl">{question.speed_analysis?.length || 0}</div></div>
+            <div><div className="font-mono text-[10px] text-bone-100/40">ACCURACY</div><div className="font-display text-3xl">{question.accuracy_analysis?.length || 0}</div></div>
+          </div>
+        </div>
+        <div className="col-span-12 lg:col-span-7 editorial p-8">
+          <div className="font-mono text-[10px] tracking-[0.24em] text-ink-400">WEAK TOPIC DRILLDOWN</div>
+          <div className="mt-5 divide-y divide-line">
+            {(question.weak_topics || []).slice(0, 6).map((topic) => (
+              <div key={`${topic.section_code}-${topic.topic}`} className="grid grid-cols-12 gap-3 py-3 text-sm">
+                <div className="col-span-4">
+                  <div className="font-display text-lg">{topic.topic}</div>
+                  <div className="font-mono text-[10px] text-ink-400">{topic.section_code}</div>
+                </div>
+                <div className="col-span-2 text-right font-display text-accent">{topic.mastery_score}</div>
+                <div className="col-span-2 text-right font-mono">{topic.accuracy}% acc</div>
+                <div className="col-span-2 text-right font-mono">{topic.speed}% speed</div>
+                <div className="col-span-2 text-right text-xs text-ink-500">{topic.solve_rate}% solved</div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-12 gap-3" data-testid="apt-sections">

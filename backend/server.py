@@ -286,6 +286,150 @@ def _clamp_score(value: float) -> float:
     return max(0, min(100, float(value or 0)))
 
 
+def _slug(value: str) -> str:
+    return "".join(ch.lower() if ch.isalnum() else "_" for ch in value).strip("_")
+
+
+def _difficulty_for_index(index: int) -> str:
+    if index <= 2:
+        return "Easy"
+    if index <= 4:
+        return "Medium"
+    return "Hard"
+
+
+def _build_aptitude_question_bank(now: Optional[str] = None) -> list[dict]:
+    ts = now or datetime.now(timezone.utc).isoformat()
+    questions = []
+    global_order = 1
+    for section in APTITUDE_SECTIONS:
+        for topic_index, topic in enumerate(section["topics"], start=1):
+            topic_slug = _slug(topic)
+            for index in range(1, 7):
+                difficulty = _difficulty_for_index(index)
+                questions.append({
+                    "question_id": f"apt_{section['code'].lower()}_{topic_slug}_{index:02d}",
+                    "section": section["name"],
+                    "section_code": section["code"],
+                    "topic": topic,
+                    "topic_code": topic_slug.upper(),
+                    "difficulty": difficulty,
+                    "title": f"{topic} drill {index}",
+                    "prompt": f"{topic} placement aptitude drill {index}",
+                    "order": index,
+                    "topic_order": topic_index,
+                    "global_order": global_order,
+                    "expected_time_sec": 45 if difficulty == "Easy" else 75 if difficulty == "Medium" else 105,
+                    "created_at": ts,
+                    "active": True,
+                })
+                global_order += 1
+    return questions
+
+
+async def _ensure_aptitude_catalog() -> None:
+    if await db.aptitude_questions.count_documents({}) == 0:
+        await db.aptitude_questions.insert_many(_build_aptitude_question_bank())
+
+
+async def _ensure_student_aptitude_progress(student: dict) -> None:
+    await _ensure_aptitude_catalog()
+    existing = await db.aptitude_question_progress.count_documents({"student_id": student["student_id"]})
+    if existing:
+        return
+    now = datetime.now(timezone.utc).isoformat()
+    scores = await db.aptitude_scores.find({"student_id": student["student_id"]}, {"_id": 0}).to_list(100)
+    score_by_section = {row["section_code"]: row for row in scores}
+    questions = await db.aptitude_questions.find({}, {"_id": 0}).sort("global_order", 1).to_list(1000)
+    inserts = []
+    for section in APTITUDE_SECTIONS:
+        section_questions = [q for q in questions if q["section_code"] == section["code"]]
+        score = score_by_section.get(section["code"], {})
+        score_pct = float(score.get("score_pct", 0) or 0)
+        accuracy_pct = float(score.get("accuracy_pct", score_pct) or 0)
+        avg_time = float(score.get("avg_time_sec", 90) or 90)
+        attempted_count = int(round(len(section_questions) * min(1, max(0.35, (score.get("tests_taken", 2) or 2) / 18))))
+        solved_count = int(round(len(section_questions) * min(1, max(0, score_pct / 100))))
+        attempted_count = max(solved_count, min(len(section_questions), attempted_count))
+        for index, question in enumerate(section_questions[:attempted_count], start=1):
+            solved = index <= solved_count
+            expected = float(question.get("expected_time_sec", 75) or 75)
+            speed = _clamp_score(100 - max(0, avg_time - expected) * 0.9)
+            mastery = round(_clamp_score((score_pct * 0.48) + (accuracy_pct * 0.32) + (speed * 0.20) + (8 if solved else -8)), 1)
+            last_attempted = score.get("attempted_at") or now
+            inserts.append({
+                "progress_id": f"aptp_{uuid.uuid4().hex[:10]}",
+                "student_id": student["student_id"],
+                "institution_id": student["institution_id"],
+                "question_id": question["question_id"],
+                "topic": question["topic"],
+                "topic_code": question["topic_code"],
+                "section": question["section"],
+                "section_code": question["section_code"],
+                "difficulty": question["difficulty"],
+                "solved": solved,
+                "attempted": True,
+                "accuracy": round(accuracy_pct, 1),
+                "speed": round(speed, 1),
+                "average_time": round(avg_time, 1),
+                "mastery_score": mastery,
+                "revision_due": mastery < 72,
+                "last_attempted": last_attempted,
+                "updated_at": now,
+            })
+    if inserts:
+        await db.aptitude_question_progress.insert_many(inserts)
+
+
+async def _ensure_aptitude_progress_for_students(students: list[dict]) -> None:
+    await _ensure_aptitude_catalog()
+    for student in students[:1200]:
+        await _ensure_student_aptitude_progress(student)
+
+
+async def _ensure_resume_versions_for_students(students: Optional[list[dict]] = None) -> None:
+    query: dict[str, Any] = {}
+    if students is not None:
+        query["student_id"] = {"$in": [student["student_id"] for student in students]}
+    reports = await db.ats_reports.find(query, {"_id": 0}).sort("created_at", 1).to_list(5000)
+    if not reports:
+        return
+    existing_ids = {
+        row["source_ats_id"]
+        for row in await db.resume_versions.find({"source_ats_id": {"$in": [r["ats_id"] for r in reports]}}, {"_id": 0, "source_ats_id": 1}).to_list(5000)
+        if row.get("source_ats_id")
+    }
+    counters: dict[str, int] = {}
+    inserts = []
+    for report in reports:
+        if report["ats_id"] in existing_ids:
+            continue
+        sid = report["student_id"]
+        counters[sid] = counters.get(sid, 0) + 1
+        keyword_score = report.get("keyword_match_pct", 0) or 0
+        recruiter_match = round((report.get("score", 0) * 0.48) + (keyword_score * 0.34) + (report.get("format_score", 0) * 0.18), 1)
+        inserts.append({
+            "resume_id": f"res_{uuid.uuid4().hex[:10]}",
+            "source_ats_id": report["ats_id"],
+            "student_id": sid,
+            "institution_id": report["institution_id"],
+            "version": counters[sid],
+            "upload_date": report.get("created_at"),
+            "uploaded_filename": report.get("uploaded_filename"),
+            "ats_score": report.get("score", 0),
+            "keyword_score": keyword_score,
+            "missing_keywords": report.get("missing_keywords", []),
+            "recruiter_match_score": recruiter_match,
+            "format_score": report.get("format_score", 0),
+            "improvement_suggestions": [
+                f"Add evidence for {kw}" for kw in (report.get("missing_keywords", []) or [])[:3]
+            ],
+            "created_at": report.get("created_at"),
+        })
+    if inserts:
+        await db.resume_versions.insert_many(inserts)
+
+
 async def _batch_readiness_summary(
     iid: str,
     *,
@@ -313,8 +457,10 @@ async def _batch_readiness_summary(
         }
 
     dsa_rows = await db.dsa_progress.find({"student_id": {"$in": sids}}, {"_id": 0}).to_list(20000)
+    aptitude_question_rows = await db.aptitude_question_progress.find({"student_id": {"$in": sids}}, {"_id": 0}).to_list(30000)
     aptitude_rows = await db.aptitude_scores.find({"student_id": {"$in": sids}}, {"_id": 0}).to_list(20000)
     ats_rows = await db.ats_reports.find({"student_id": {"$in": sids}}, {"_id": 0}).to_list(10000)
+    resume_rows = await db.resume_versions.find({"student_id": {"$in": sids}}, {"_id": 0}).to_list(10000)
     interview_rows = await db.interview_reports.find({"student_id": {"$in": sids}}, {"_id": 0}).to_list(10000)
     application_rows = await db.applications.find({"student_id": {"$in": sids}}, {"_id": 0}).to_list(20000)
 
@@ -328,9 +474,17 @@ async def _batch_readiness_summary(
     for row in aptitude_rows:
         aptitude_by_student.setdefault(row["student_id"], []).append(row)
 
+    aptitude_questions_by_student: dict[str, list[dict]] = {}
+    for row in aptitude_question_rows:
+        aptitude_questions_by_student.setdefault(row["student_id"], []).append(row)
+
     ats_by_student: dict[str, dict] = {}
     for row in sorted(ats_rows, key=lambda item: item.get("created_at") or "", reverse=True):
         ats_by_student.setdefault(row["student_id"], row)
+
+    resumes_by_student: dict[str, dict] = {}
+    for row in sorted(resume_rows, key=lambda item: (item.get("version") or 0, item.get("upload_date") or ""), reverse=True):
+        resumes_by_student.setdefault(row["student_id"], row)
 
     interviews_by_student: dict[str, list[dict]] = {}
     for row in interview_rows:
@@ -346,15 +500,25 @@ async def _batch_readiness_summary(
         dsa = dsa_by_student.get(sid, {})
         dsa_score = (dsa.get("solved", 0) / max(1, dsa.get("total", 0))) * 100 if dsa else 0
 
+        aptitude_questions = aptitude_questions_by_student.get(sid, [])
         aptitudes = aptitude_by_student.get(sid, [])
-        aptitude_score_avg = sum(row.get("score_pct", 0) or 0 for row in aptitudes) / max(1, len(aptitudes))
-        aptitude_accuracy = sum(row.get("accuracy_pct", 0) or 0 for row in aptitudes) / max(1, len(aptitudes))
-        aptitude_time = sum(row.get("avg_time_sec", 0) or 0 for row in aptitudes) / max(1, len(aptitudes))
-        speed_score = _clamp_score(100 - max(0, aptitude_time - 45) * 1.15) if aptitudes else 0
-        aptitude_score = (aptitude_score_avg * 0.65) + (aptitude_accuracy * 0.25) + (speed_score * 0.10)
+        if aptitude_questions:
+            aptitude_score_avg = sum(row.get("mastery_score", 0) or 0 for row in aptitude_questions) / max(1, len(aptitude_questions))
+            aptitude_accuracy = sum(row.get("accuracy", 0) or 0 for row in aptitude_questions) / max(1, len(aptitude_questions))
+            speed_score = sum(row.get("speed", 0) or 0 for row in aptitude_questions) / max(1, len(aptitude_questions))
+            solved = sum(1 for row in aptitude_questions if row.get("solved"))
+            attempted = sum(1 for row in aptitude_questions if row.get("attempted"))
+            aptitude_score = (aptitude_score_avg * 0.55) + (aptitude_accuracy * 0.25) + (speed_score * 0.15) + (min(100, solved / max(1, attempted) * 100) * 0.05)
+        else:
+            aptitude_score_avg = sum(row.get("score_pct", 0) or 0 for row in aptitudes) / max(1, len(aptitudes))
+            aptitude_accuracy = sum(row.get("accuracy_pct", 0) or 0 for row in aptitudes) / max(1, len(aptitudes))
+            aptitude_time = sum(row.get("avg_time_sec", 0) or 0 for row in aptitudes) / max(1, len(aptitudes))
+            speed_score = _clamp_score(100 - max(0, aptitude_time - 45) * 1.15) if aptitudes else 0
+            aptitude_score = (aptitude_score_avg * 0.65) + (aptitude_accuracy * 0.25) + (speed_score * 0.10)
 
+        latest_resume = resumes_by_student.get(sid)
         latest_ats = ats_by_student.get(sid)
-        ats_score = latest_ats.get("score", 0) if latest_ats else student.get("ats_score", 0)
+        ats_score = latest_resume.get("ats_score", 0) if latest_resume else latest_ats.get("score", 0) if latest_ats else student.get("ats_score", 0)
 
         interviews = interviews_by_student.get(sid, [])
         interview_scores = []
@@ -371,7 +535,7 @@ async def _batch_readiness_summary(
 
         cgpa_score = _clamp_score(((float(student.get("cgpa") or 0) - 5.0) / 5.0) * 100)
         applications = applications_by_student.get(sid, [])
-        active_pillars = sum([bool(dsa), bool(aptitudes), bool(latest_ats), bool(interviews), bool(applications)])
+        active_pillars = sum([bool(dsa), bool(aptitude_questions or aptitudes), bool(latest_resume or latest_ats), bool(interviews), bool(applications)])
         active_applications = len([row for row in applications if row.get("stage") not in {"Rejected", "Selected"}])
         consistency_score = _clamp_score((active_pillars / 5 * 65) + (active_applications * 12) + (len(applications) * 3))
 
@@ -577,6 +741,9 @@ async def _recruiter_talent_pool_payload(
 
 async def _student_scope_for_user(user: dict, *, department: Optional[str] = None) -> tuple[str, Optional[str], list[dict]]:
     iid = user.get("institution_id") or "inst_kmit"
+    if user.get("role") == "student" and user.get("student_id"):
+        student = await db.students.find_one({"student_id": user["student_id"]}, {"_id": 0})
+        return iid, student.get("department") if student else None, [student] if student else []
     scoped_department = department
     if user.get("role") == "faculty" and user.get("department"):
         scoped_department = user["department"]
@@ -777,6 +944,12 @@ async def _startup():
     await db.dsa_questions.create_index("question_id", unique=True)
     await db.dsa_question_progress.create_index("student_id")
     await db.dsa_question_progress.create_index("question_id")
+    await db.aptitude_questions.create_index("question_id", unique=True)
+    await db.aptitude_question_progress.create_index("student_id")
+    await db.aptitude_question_progress.create_index("question_id")
+    await db.resume_versions.create_index("student_id")
+    await db.recruiter_shortlists.create_index("recruiter_id")
+    await db.recruiter_saved_filters.create_index("recruiter_id")
     n_inst = await db.institutions.count_documents({})
     if n_inst == 0:
         log.info("Seeding institutions, students, recruiters, DSA, aptitude…")
@@ -791,11 +964,20 @@ async def _startup():
     if await db.dsa_questions.count_documents({}) == 0:
         await db.dsa_questions.insert_many(build_dsa_question_bank())
 
+    await _ensure_aptitude_catalog()
+
     # Demo users with password — idempotent
     if await db.dsa_question_progress.count_documents({}) == 0 and await db.dsa_progress.count_documents({}) > 0:
         students_with_dsa = await db.students.find({"institution_id": "inst_kmit"}, {"_id": 0}).to_list(1000)
         for student in students_with_dsa:
             await _ensure_student_dsa_catalog(student)
+
+    if await db.aptitude_question_progress.count_documents({}) == 0 and await db.aptitude_scores.count_documents({}) > 0:
+        students_with_aptitude = await db.students.find({"institution_id": "inst_kmit"}, {"_id": 0}).to_list(1000)
+        await _ensure_aptitude_progress_for_students(students_with_aptitude)
+
+    if await db.resume_versions.count_documents({}) == 0 and await db.ats_reports.count_documents({}) > 0:
+        await _ensure_resume_versions_for_students()
 
     demo_users = [
         {"email": ADMIN_EMAIL, "name": "Platform Super Admin", "role": "super_admin", "institution_id": None, "department": None},
@@ -1652,6 +1834,219 @@ async def readiness_students(
 
 
 # ============== APTITUDE INTELLIGENCE ==============
+async def _aptitude_question_analytics(user: dict, department: Optional[str] = None) -> dict:
+    iid, scoped_department, students = await _student_scope_for_user(user, department=department)
+    if not iid:
+        return {"questions": [], "topics": [], "sections": [], "priority_students": []}
+    await _ensure_aptitude_progress_for_students(students)
+    sids = [student["student_id"] for student in students]
+    smap = {student["student_id"]: student for student in students}
+    progress = await db.aptitude_question_progress.find({"student_id": {"$in": sids}}, {"_id": 0}).to_list(50000)
+    questions = await db.aptitude_questions.find({}, {"_id": 0}).sort("global_order", 1).to_list(1000)
+    qmap = {question["question_id"]: question for question in questions}
+
+    by_topic: dict[str, dict[str, Any]] = {}
+    by_section: dict[str, dict[str, Any]] = {}
+    by_student: dict[str, dict[str, Any]] = {}
+    for row in progress:
+        question = qmap.get(row["question_id"], {})
+        topic_key = f"{row.get('section_code')}::{row.get('topic')}"
+        topic = by_topic.setdefault(topic_key, {
+            "section_code": row.get("section_code"),
+            "section": row.get("section"),
+            "topic": row.get("topic"),
+            "difficulty_mix": {},
+            "attempted": 0,
+            "solved": 0,
+            "accuracy_sum": 0,
+            "speed_sum": 0,
+            "mastery_sum": 0,
+            "time_sum": 0,
+            "students": set(),
+            "questions": set(),
+        })
+        section = by_section.setdefault(row.get("section_code"), {
+            "section_code": row.get("section_code"),
+            "section": row.get("section"),
+            "attempted": 0,
+            "solved": 0,
+            "accuracy_sum": 0,
+            "speed_sum": 0,
+            "mastery_sum": 0,
+            "time_sum": 0,
+            "students": set(),
+            "revision_due": 0,
+        })
+        student_bucket = by_student.setdefault(row["student_id"], {
+            "student_id": row["student_id"],
+            "attempted": 0,
+            "solved": 0,
+            "accuracy_sum": 0,
+            "speed_sum": 0,
+            "mastery_sum": 0,
+            "time_sum": 0,
+            "revision_due": 0,
+            "weak_topics": [],
+        })
+        for bucket in (topic, section, student_bucket):
+            bucket["attempted"] += 1 if row.get("attempted") else 0
+            bucket["solved"] += 1 if row.get("solved") else 0
+            bucket["accuracy_sum"] += row.get("accuracy", 0) or 0
+            bucket["speed_sum"] += row.get("speed", 0) or 0
+            bucket["mastery_sum"] += row.get("mastery_score", 0) or 0
+            bucket["time_sum"] += row.get("average_time", 0) or 0
+        topic["students"].add(row["student_id"])
+        topic["questions"].add(row["question_id"])
+        topic["difficulty_mix"][question.get("difficulty", row.get("difficulty"))] = topic["difficulty_mix"].get(question.get("difficulty", row.get("difficulty")), 0) + 1
+        section["students"].add(row["student_id"])
+        if row.get("revision_due"):
+            section["revision_due"] += 1
+            student_bucket["revision_due"] += 1
+        if row.get("mastery_score", 0) < 60:
+            student_bucket["weak_topics"].append(row.get("topic"))
+
+    def finish(bucket: dict) -> dict:
+        attempted = max(1, bucket.get("attempted", 0))
+        return {
+            **{k: v for k, v in bucket.items() if not isinstance(v, set) and not k.endswith("_sum")},
+            "accuracy": round(bucket.get("accuracy_sum", 0) / attempted, 1),
+            "speed": round(bucket.get("speed_sum", 0) / attempted, 1),
+            "average_time": round(bucket.get("time_sum", 0) / attempted, 1),
+            "mastery_score": round(bucket.get("mastery_sum", 0) / attempted, 1),
+            "solve_rate": _pct(bucket.get("solved", 0), attempted, 1),
+            "students": len(bucket.get("students", [])) if isinstance(bucket.get("students"), set) else bucket.get("students"),
+        }
+
+    topic_rows = [finish(row) for row in by_topic.values()]
+    section_rows = [finish(row) for row in by_section.values()]
+    student_rows = []
+    for row in by_student.values():
+        student = smap.get(row["student_id"], {})
+        finished = finish(row)
+        finished.update({
+            "student_name": student.get("name", "-"),
+            "roll_number": student.get("roll_number", "-"),
+            "department": student.get("department", "-"),
+            "weak_topics": sorted(set(row.get("weak_topics", [])))[:5],
+        })
+        student_rows.append(finished)
+    topic_rows.sort(key=lambda row: (row["mastery_score"], row["accuracy"], -row["average_time"]))
+    student_rows.sort(key=lambda row: (row["mastery_score"], row["accuracy"], -row["revision_due"]))
+    attempted_total = sum(row.get("attempted", 0) for row in section_rows)
+    solved_total = sum(row.get("solved", 0) for row in section_rows)
+    avg_mastery = round(sum(row.get("mastery_score", 0) for row in section_rows) / max(1, len(section_rows)), 1)
+    avg_accuracy = round(sum(row.get("accuracy", 0) for row in section_rows) / max(1, len(section_rows)), 1)
+    avg_speed = round(sum(row.get("speed", 0) for row in section_rows) / max(1, len(section_rows)), 1)
+    return {
+        "catalog_total": len(questions),
+        "summary": {
+            "students": len(student_rows),
+            "attempted": attempted_total,
+            "solved": solved_total,
+            "solve_rate": _pct(solved_total, max(1, attempted_total), 1),
+            "avg_mastery": avg_mastery,
+            "avg_accuracy": avg_accuracy,
+            "avg_speed": avg_speed,
+            "revision_due": sum(row.get("revision_due", 0) for row in section_rows),
+            "health": _health((avg_mastery * 0.55) + (avg_accuracy * 0.30) + (avg_speed * 0.15)),
+        },
+        "sections": sorted(section_rows, key=lambda row: row["mastery_score"]),
+        "topics": topic_rows,
+        "weak_topics": topic_rows[:8],
+        "speed_analysis": sorted(topic_rows, key=lambda row: row["speed"])[:8],
+        "accuracy_analysis": sorted(topic_rows, key=lambda row: row["accuracy"])[:8],
+        "priority_students": student_rows[:15],
+        "scope": f"department:{scoped_department}" if scoped_department else "institution",
+    }
+
+
+@app.get("/api/aptitude/questions")
+async def aptitude_questions(user=Depends(get_session_user)):
+    await _ensure_aptitude_catalog()
+    questions = await db.aptitude_questions.find({}, {"_id": 0}).sort("global_order", 1).to_list(1000)
+    return {"questions": questions, "sections": APTITUDE_SECTIONS, "total": len(questions)}
+
+
+@app.get("/api/me/aptitude/questions")
+async def my_aptitude_questions(user=Depends(require_roles("student"))):
+    _sid, student = await _resolve_student_for_user(user)
+    if not student:
+        raise HTTPException(404, "no student record bound")
+    await _ensure_student_aptitude_progress(student)
+    questions = await db.aptitude_questions.find({}, {"_id": 0}).sort("global_order", 1).to_list(1000)
+    progress = await db.aptitude_question_progress.find({"student_id": student["student_id"]}, {"_id": 0}).to_list(1000)
+    by_question = {row["question_id"]: row for row in progress}
+    merged = [{**question, **by_question.get(question["question_id"], {})} for question in questions]
+    return {
+        "student_id": student["student_id"],
+        "sections": APTITUDE_SECTIONS,
+        "total": len(questions),
+        "attempted": sum(1 for row in merged if row.get("attempted")),
+        "solved": sum(1 for row in merged if row.get("solved")),
+        "revision_due": sum(1 for row in merged if row.get("revision_due")),
+        "questions": merged,
+    }
+
+
+@app.patch("/api/me/aptitude/questions/{question_id}")
+async def update_my_aptitude_question(question_id: str, body: dict, request: Request, user=Depends(require_roles("student"))):
+    _sid, student = await _resolve_student_for_user(user)
+    if not student:
+        raise HTTPException(404, "no student record bound")
+    await _ensure_student_aptitude_progress(student)
+    question = await db.aptitude_questions.find_one({"question_id": question_id}, {"_id": 0})
+    if not question:
+        raise HTTPException(404, "question not found")
+    existing = await db.aptitude_question_progress.find_one({"student_id": student["student_id"], "question_id": question_id}, {"_id": 0}) or {}
+    solved = bool(body.get("solved", existing.get("solved", False)))
+    attempted = bool(body.get("attempted", existing.get("attempted", False)) or solved)
+    accuracy = _clamp_score(body.get("accuracy", existing.get("accuracy", 85 if solved else 45)))
+    average_time = max(1, float(body.get("average_time", existing.get("average_time", question.get("expected_time_sec", 75)))))
+    speed = _clamp_score(body.get("speed", 100 - max(0, average_time - question.get("expected_time_sec", 75)) * 0.9))
+    mastery = _clamp_score(body.get("mastery_score", (accuracy * 0.45) + (speed * 0.35) + (20 if solved else 0)))
+    now = datetime.now(timezone.utc).isoformat()
+    update = {
+        "progress_id": existing.get("progress_id") or f"aptp_{uuid.uuid4().hex[:10]}",
+        "student_id": student["student_id"],
+        "institution_id": student["institution_id"],
+        "question_id": question_id,
+        "topic": question["topic"],
+        "topic_code": question["topic_code"],
+        "section": question["section"],
+        "section_code": question["section_code"],
+        "difficulty": question["difficulty"],
+        "solved": solved,
+        "attempted": attempted,
+        "accuracy": round(accuracy, 1),
+        "speed": round(speed, 1),
+        "average_time": round(average_time, 1),
+        "mastery_score": round(mastery, 1),
+        "revision_due": bool(body.get("revision_due", mastery < 72)),
+        "last_attempted": now,
+        "updated_at": now,
+    }
+    await db.aptitude_question_progress.update_one(
+        {"student_id": student["student_id"], "question_id": question_id},
+        {"$set": update},
+        upsert=True,
+    )
+    await _audit_log(
+        "aptitude.question_progress_updated",
+        user=user,
+        institution_id=student["institution_id"],
+        resource="aptitude_question",
+        resource_id=question_id,
+        metadata={"solved": solved, "mastery_score": update["mastery_score"]},
+        request=request,
+    )
+    return {"question": {**question, **update}}
+
+
+@app.get("/api/aptitude/question-analytics")
+async def aptitude_question_analytics(department: Optional[str] = None, user=Depends(require_roles("super_admin", "institution_admin", "tpo", "faculty"))):
+    return await _aptitude_question_analytics(user, department=department)
+
+
 @app.get("/api/aptitude/intelligence")
 async def aptitude_intelligence(department: Optional[str] = None, user=Depends(get_session_user)):
     iid = user.get("institution_id")
@@ -1660,7 +2055,9 @@ async def aptitude_intelligence(department: Optional[str] = None, user=Depends(g
     _iid, scoped_department, students = await _student_scope_for_user(user, department=department)
     sids = [student["student_id"] for student in students]
     match: dict[str, Any] = {"institution_id": iid}
-    if scoped_department:
+    if user.get("role") == "student":
+        match["student_id"] = {"$in": sids}
+    elif scoped_department:
         match["student_id"] = {"$in": sids}
     rows = await db.aptitude_scores.find(match, {"_id": 0}).to_list(5000)
     smap = {student["student_id"]: student for student in students}
@@ -1707,6 +2104,7 @@ async def aptitude_intelligence(department: Optional[str] = None, user=Depends(g
     weak_sections = sorted(sections, key=lambda row: row["weakness_index"], reverse=True)[:3]
     overall_score = _avg_num(rows, "score_pct")
     overall_accuracy = _avg_num(rows, "accuracy_pct")
+    question_analytics = await _aptitude_question_analytics(user, department=department) if user.get("role") in {"super_admin", "institution_admin", "tpo", "faculty"} else {}
     recommendations = [
         {
             "area": section["section_name"],
@@ -1729,6 +2127,10 @@ async def aptitude_intelligence(department: Optional[str] = None, user=Depends(g
         },
         "weak_sections": weak_sections,
         "priority_students": priority_students,
+        "question_analytics": question_analytics,
+        "weak_topics": question_analytics.get("weak_topics", []),
+        "speed_analysis": question_analytics.get("speed_analysis", []),
+        "accuracy_analysis": question_analytics.get("accuracy_analysis", []),
         "recommendations": recommendations,
         "scope": f"department:{scoped_department}" if scoped_department else "institution",
     }
@@ -1741,14 +2143,21 @@ async def ats_intelligence(department: Optional[str] = None, user=Depends(get_se
     if not iid:
         return {"avg_score": 0, "rows": [], "summary": {"health": "critical"}}
     _iid, scoped_department, scoped_students = await _student_scope_for_user(user, department=department)
+    await _ensure_resume_versions_for_students(scoped_students)
     scoped_sids = [student["student_id"] for student in scoped_students]
     query: dict[str, Any] = {"institution_id": iid}
-    if scoped_department:
+    if user.get("role") == "student":
+        query["student_id"] = {"$in": scoped_sids}
+    elif scoped_department:
         query["student_id"] = {"$in": scoped_sids}
     pipeline = [{"$match": query},
                 {"$group": {"_id": None, "avg": {"$avg": "$score"}, "count": {"$sum": 1}}}]
     agg = await db.ats_reports.aggregate(pipeline).to_list(1)
     rows = await db.ats_reports.find(query, {"_id": 0}).sort("created_at", -1).limit(100).to_list(100)
+    version_query: dict[str, Any] = {"institution_id": iid}
+    if scoped_sids:
+        version_query["student_id"] = {"$in": scoped_sids}
+    versions = await db.resume_versions.find(version_query, {"_id": 0}).sort("upload_date", -1).limit(250).to_list(250)
     sids = list({r["student_id"] for r in rows})
     students = await db.students.find({"student_id": {"$in": sids}}, {"_id": 0}).to_list(200)
     smap = {s["student_id"]: s for s in students}
@@ -1760,7 +2169,7 @@ async def ats_intelligence(department: Optional[str] = None, user=Depends(get_se
     for row in rows:
         row["risk_level"] = "high" if row.get("score", 0) < 60 else "medium" if row.get("score", 0) < 75 else "low"
     keyword_counts: dict[str, int] = {}
-    for row in rows:
+    for row in rows + versions:
         for keyword in row.get("missing_keywords", []):
             keyword_counts[keyword] = keyword_counts.get(keyword, 0) + 1
     keyword_heatmap = [
@@ -1774,6 +2183,42 @@ async def ats_intelligence(department: Optional[str] = None, user=Depends(get_se
     avg_score = round(agg[0]["avg"], 1) if agg else 0
     avg_keyword = _avg_num(rows, "keyword_match_pct")
     avg_format = _avg_num(rows, "format_score")
+    latest_versions: dict[str, dict] = {}
+    version_history: dict[str, list[dict]] = {}
+    for version in sorted(versions, key=lambda row: (row.get("student_id"), row.get("version") or 0)):
+        version_history.setdefault(version["student_id"], []).append(version)
+        latest_versions[version["student_id"]] = version
+    version_rows = []
+    for sid, history in version_history.items():
+        student = smap.get(sid, {})
+        latest = history[-1]
+        first = history[0]
+        version_rows.append({
+            "student_id": sid,
+            "student_name": student.get("name", "-"),
+            "roll_number": student.get("roll_number", "-"),
+            "department": student.get("department", "-"),
+            "versions": len(history),
+            "latest_resume_id": latest.get("resume_id"),
+            "latest_version": latest.get("version"),
+            "ats_score": latest.get("ats_score", 0),
+            "keyword_score": latest.get("keyword_score", 0),
+            "recruiter_match_score": latest.get("recruiter_match_score", 0),
+            "score_delta": round((latest.get("ats_score", 0) or 0) - (first.get("ats_score", 0) or 0), 1),
+            "missing_keywords": latest.get("missing_keywords", []),
+            "suggestions": latest.get("improvement_suggestions", []),
+        })
+    version_rows.sort(key=lambda row: (row["ats_score"], row["keyword_score"]))
+    skill_gaps = [
+        {
+            "keyword": item["keyword"],
+            "missing_count": item["missing_count"],
+            "coverage_gap_pct": item["coverage_gap_pct"],
+            "suggestion": f"Add quantified project or internship evidence for {item['keyword']}.",
+        }
+        for item in keyword_heatmap[:10]
+    ]
+    recruiter_compatibility = sorted(version_rows, key=lambda row: row["recruiter_match_score"], reverse=True)[:20]
     recommendations = []
     if keyword_heatmap:
         recommendations.append({
@@ -1800,9 +2245,34 @@ async def ats_intelligence(department: Optional[str] = None, user=Depends(get_se
             "health": _health((avg_score * 0.65) + (avg_keyword * 0.25) + (avg_format * 0.10)),
         },
         "keyword_heatmap": keyword_heatmap[:12],
+        "skill_gaps": skill_gaps,
+        "resume_versions": versions[:80],
+        "version_history": version_rows[:40],
+        "recruiter_compatibility": recruiter_compatibility,
         "priority_students": priority_students,
         "recommendations": recommendations,
         "scope": f"department:{scoped_department}" if scoped_department else "institution",
+    }
+
+
+@app.get("/api/ats/resume-versions")
+async def ats_resume_versions(user=Depends(get_session_user)):
+    _iid, _dept, students = await _student_scope_for_user(user)
+    await _ensure_resume_versions_for_students(students)
+    sids = [student["student_id"] for student in students]
+    query: dict[str, Any] = {"student_id": {"$in": sids}} if sids else {"student_id": "__none__"}
+    versions = await db.resume_versions.find(query, {"_id": 0}).sort("upload_date", -1).to_list(500)
+    return {"items": versions, "count": len(versions)}
+
+
+@app.get("/api/ats/heatmap")
+async def ats_heatmap(user=Depends(get_session_user)):
+    data = await ats_intelligence(user=user)
+    return {
+        "keyword_heatmap": data.get("keyword_heatmap", []),
+        "skill_gaps": data.get("skill_gaps", []),
+        "recruiter_compatibility": data.get("recruiter_compatibility", []),
+        "scope": data.get("scope"),
     }
 
 
@@ -1815,7 +2285,9 @@ async def interviews_intelligence(department: Optional[str] = None, user=Depends
     _iid, scoped_department, scoped_students = await _student_scope_for_user(user, department=department)
     scoped_sids = [student["student_id"] for student in scoped_students]
     query: dict[str, Any] = {"institution_id": iid}
-    if scoped_department:
+    if user.get("role") == "student":
+        query["student_id"] = {"$in": scoped_sids}
+    elif scoped_department:
         query["student_id"] = {"$in": scoped_sids}
     rows = await db.interview_reports.find(query, {"_id": 0}).sort("conducted_at", -1).limit(120).to_list(120)
     sids = list({r["student_id"] for r in rows})
@@ -1883,6 +2355,59 @@ async def interviews_intelligence(department: Optional[str] = None, user=Depends
         "by_type": by_type,
         "priority_students": priority_students,
         "recommendations": recommendations,
+        "scope": f"department:{scoped_department}" if scoped_department else "institution",
+    }
+
+
+@app.get("/api/interviews/history")
+async def interviews_history(user=Depends(get_session_user)):
+    _iid, scoped_department, students = await _student_scope_for_user(user)
+    sids = [student["student_id"] for student in students]
+    smap = {student["student_id"]: student for student in students}
+    query: dict[str, Any] = {"student_id": {"$in": sids}} if sids else {"student_id": "__none__"}
+    rows = await db.interview_reports.find(query, {"_id": 0}).sort("conducted_at", 1).to_list(1000)
+    by_student: dict[str, list[dict]] = {}
+    for row in rows:
+        by_student.setdefault(row["student_id"], []).append(row)
+
+    timelines = []
+    for sid, history in by_student.items():
+        student = smap.get(sid, {})
+        first = history[0]
+        latest = history[-1]
+        rubric_latest = {
+            "communication": latest.get("communication_score", 0),
+            "confidence": latest.get("confidence_score", 0),
+            "technical": latest.get("technical_score", 0),
+            "hr": latest.get("hr_score", latest.get("body_language_score", 0)),
+            "overall": latest.get("overall_score", 0),
+        }
+        weak_areas = [
+            {"area": area, "score": score, "gap": round(max(0, 75 - (score or 0)), 1)}
+            for area, score in rubric_latest.items()
+            if area != "overall" and (score or 0) < 75
+        ]
+        weak_areas.sort(key=lambda row: row["gap"], reverse=True)
+        timelines.append({
+            "student_id": sid,
+            "student_name": student.get("name", "-"),
+            "roll_number": student.get("roll_number", "-"),
+            "department": student.get("department", "-"),
+            "interviews": len(history),
+            "first_score": first.get("overall_score", 0),
+            "latest_score": latest.get("overall_score", 0),
+            "improvement": round((latest.get("overall_score", 0) or 0) - (first.get("overall_score", 0) or 0), 1),
+            "interview_readiness": _health(latest.get("overall_score", 0) or 0),
+            "weak_areas": weak_areas[:4],
+            "latest_feedback": latest.get("feedback"),
+            "history": history[-6:],
+        })
+    timelines.sort(key=lambda row: (row["latest_score"], -row["interviews"]))
+    return {
+        "items": timelines,
+        "weak_area_detection": timelines[:15],
+        "improvement_tracking": sorted(timelines, key=lambda row: row["improvement"])[:15],
+        "student_timeline": timelines[0]["history"] if user.get("role") == "student" and timelines else [],
         "scope": f"department:{scoped_department}" if scoped_department else "institution",
     }
 
@@ -1958,6 +2483,62 @@ async def placements_overview(user=Depends(get_session_user)):
             "component_avgs": readiness["component_avgs"],
             "weak_students": readiness["weak_students"],
         },
+    }
+
+
+@app.get("/api/placements/intelligence")
+async def placement_intelligence(department: Optional[str] = None, user=Depends(require_roles("super_admin", "institution_admin", "tpo", "faculty"))):
+    analytics = await _analytics_engine_payload(user, department=department)
+    iid = analytics["scope"]["institution_id"]
+    scoped_department = analytics["scope"].get("department")
+    readiness = await _batch_readiness_summary(iid, department=scoped_department, limit=1500)
+    risk_students = sorted(
+        [
+            row for row in readiness.get("weak_students", [])
+            if row.get("readiness_score", 0) < 68 or not row.get("placement", {}).get("placed")
+        ],
+        key=lambda row: row.get("readiness_score", 0),
+    )[:20]
+    app_query: dict[str, Any] = {"institution_id": iid}
+    if scoped_department:
+        app_query["department"] = scoped_department
+    applications = await db.applications.find(app_query, {"_id": 0}).to_list(5000)
+    recruiter_map: dict[str, dict[str, Any]] = {}
+    for application in applications:
+        company = application.get("company") or "Unknown"
+        row = recruiter_map.setdefault(company, {"company": company, "applications": 0, "selected": 0, "interviews": 0, "rejected": 0})
+        row["applications"] += 1
+        if application.get("stage") == "Selected":
+            row["selected"] += 1
+        elif application.get("stage") == "Interview":
+            row["interviews"] += 1
+        elif application.get("stage") == "Rejected":
+            row["rejected"] += 1
+    recruiter_conversions = []
+    for row in recruiter_map.values():
+        row["conversion_rate"] = _pct(row["selected"], max(1, row["applications"]), 1)
+        row["interview_rate"] = _pct(row["interviews"], max(1, row["applications"]), 1)
+        recruiter_conversions.append(row)
+    recruiter_conversions.sort(key=lambda row: (row["conversion_rate"], row["applications"]), reverse=True)
+    readiness_trends = [
+        {
+            "band": band,
+            "students": count,
+            "share": _pct(count, max(1, len(readiness.get("rows", []))), 1),
+        }
+        for band, count in readiness.get("by_band", {}).items()
+    ]
+    return {
+        "scope": analytics["scope"],
+        "forecast": analytics["forecast"],
+        "placement_funnel": analytics["funnel"],
+        "department_analytics": analytics["department_health"],
+        "institution_analytics": analytics["summary"],
+        "risk_students": risk_students,
+        "recruiter_conversions": recruiter_conversions[:20],
+        "readiness_trends": readiness_trends,
+        "recommendations": analytics["recommendations"],
+        "generated_at": datetime.now(timezone.utc).isoformat(),
     }
 
 
@@ -2642,6 +3223,143 @@ async def my_recruiter_analytics(user=Depends(require_roles("recruiter"))):
         "upcoming_interviews": upcoming,
         "action_queue": action_queue,
     }
+
+
+def _candidate_skill_match(candidate: dict, job: dict) -> dict:
+    candidate_skills = {skill.lower() for skill in candidate.get("skills", [])}
+    required = {skill.lower() for skill in job.get("skills", []) or []}
+    if not required:
+        title = " ".join([job.get("title", ""), job.get("role", "")]).lower()
+        required = {skill for skill in ["python", "java", "react", "sql", "aws", "dsa", "machine learning"] if skill in title}
+    overlap = sorted(candidate_skills.intersection(required))
+    missing = sorted(required.difference(candidate_skills))
+    score = _pct(len(overlap), max(1, len(required)), 1) if required else min(100, candidate.get("readiness_score", 0) or 0)
+    return {"score": score, "matched_skills": overlap, "missing_skills": missing}
+
+
+@app.get("/api/recruiters/me/recommendations")
+async def my_recruiter_recommendations(user=Depends(require_roles("recruiter"))):
+    recruiter_id = await _resolve_recruiter_id(user)
+    jobs = await db.jobs.find({"recruiter_id": recruiter_id or "__none__", "status": "open"}, {"_id": 0}).sort("drive_date", -1).to_list(20)
+    base_pool = await _recruiter_talent_pool_payload(recruiter_id, min_cgpa=6.0, min_readiness=0, limit=120)
+    recommendations = []
+    for job in jobs[:8]:
+        for candidate in base_pool.get("items", []):
+            match = _candidate_skill_match(candidate, job)
+            readiness = candidate.get("readiness_score", 0) or 0
+            ats = candidate.get("ats_score", 0) or 0
+            cgpa = float(candidate.get("cgpa") or 0)
+            interview_next_score = round((readiness * 0.45) + (ats * 0.20) + (match["score"] * 0.25) + (min(100, cgpa * 10) * 0.10), 1)
+            recommendations.append({
+                "job_id": job["job_id"],
+                "job_title": job.get("title"),
+                "company": job.get("company"),
+                "student_id": candidate["student_id"],
+                "student_name": candidate.get("name"),
+                "roll_number": candidate.get("roll_number"),
+                "department": candidate.get("department"),
+                "cgpa": candidate.get("cgpa"),
+                "readiness_score": readiness,
+                "ats_score": ats,
+                "skill_match_score": match["score"],
+                "matched_skills": match["matched_skills"],
+                "missing_skills": match["missing_skills"],
+                "interview_next_score": interview_next_score,
+                "answer": "Interview next" if interview_next_score >= 76 else "Keep warm" if interview_next_score >= 64 else "Needs evidence",
+            })
+    recommendations.sort(key=lambda row: row["interview_next_score"], reverse=True)
+    return {
+        "items": recommendations[:40],
+        "jobs_considered": len(jobs),
+        "answer": "Which students should I interview next?",
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+@app.get("/api/recruiters/me/shortlists")
+async def my_recruiter_shortlists(user=Depends(require_roles("recruiter"))):
+    recruiter_id = await _resolve_recruiter_id(user)
+    items = await db.recruiter_shortlists.find({"recruiter_id": recruiter_id or "__none__"}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    return {"items": items, "count": len(items)}
+
+
+@app.post("/api/recruiters/me/shortlists")
+async def create_recruiter_shortlist(body: dict, request: Request, user=Depends(require_roles("recruiter"))):
+    recruiter_id = await _resolve_recruiter_id(user)
+    student_id = body.get("student_id")
+    if not student_id:
+        raise HTTPException(400, "student_id required")
+    student = await db.students.find_one({"student_id": student_id}, {"_id": 0})
+    if not student:
+        raise HTTPException(404, "student not found")
+    item = {
+        "shortlist_id": f"short_{uuid.uuid4().hex[:10]}",
+        "recruiter_id": recruiter_id,
+        "student_id": student_id,
+        "job_id": body.get("job_id"),
+        "student_name": student.get("name"),
+        "roll_number": student.get("roll_number"),
+        "department": student.get("department"),
+        "institution_id": student.get("institution_id"),
+        "readiness_score": body.get("readiness_score"),
+        "match_score": body.get("match_score"),
+        "status": body.get("status", "shortlisted"),
+        "notes": body.get("notes", ""),
+        "created_by": user["user_id"],
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.recruiter_shortlists.update_one(
+        {"recruiter_id": recruiter_id, "student_id": student_id, "job_id": item.get("job_id")},
+        {"$set": item},
+        upsert=True,
+    )
+    await _audit_log(
+        "recruiter.shortlisted_candidate",
+        user=user,
+        institution_id=student.get("institution_id"),
+        resource="student",
+        resource_id=student_id,
+        metadata={"job_id": item.get("job_id"), "match_score": item.get("match_score")},
+        request=request,
+    )
+    return item
+
+
+@app.get("/api/recruiters/me/saved-filters")
+async def my_recruiter_saved_filters(user=Depends(require_roles("recruiter"))):
+    recruiter_id = await _resolve_recruiter_id(user)
+    items = await db.recruiter_saved_filters.find({"recruiter_id": recruiter_id or "__none__"}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return {"items": items, "count": len(items)}
+
+
+@app.post("/api/recruiters/me/saved-filters")
+async def create_recruiter_saved_filter(body: dict, request: Request, user=Depends(require_roles("recruiter"))):
+    recruiter_id = await _resolve_recruiter_id(user)
+    item = {
+        "filter_id": f"filter_{uuid.uuid4().hex[:10]}",
+        "recruiter_id": recruiter_id,
+        "name": body.get("name") or "Saved talent view",
+        "filters": {
+            "min_cgpa": body.get("min_cgpa", 7),
+            "min_readiness": body.get("min_readiness", 70),
+            "department": body.get("department"),
+            "skill": body.get("skill"),
+        },
+        "created_by": user["user_id"],
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.recruiter_saved_filters.insert_one(item)
+    await _audit_log(
+        "recruiter.saved_filter_created",
+        user=user,
+        institution_id=None,
+        resource="recruiter_saved_filter",
+        resource_id=item["filter_id"],
+        metadata=item["filters"],
+        request=request,
+    )
+    item.pop("_id", None)
+    return item
 
 
 @app.get("/api/recruiters/{recruiter_id}/talent-pool")
@@ -3398,6 +4116,33 @@ async def upload_resume(
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.ats_reports.insert_one(record)
+    if student_id:
+        previous_versions = await db.resume_versions.count_documents({"student_id": student_id})
+        recruiter_match = round(
+            ((record.get("score") or 0) * 0.48)
+            + ((record.get("keyword_match_pct") or 0) * 0.34)
+            + ((record.get("format_score") or 0) * 0.18),
+            1,
+        )
+        await db.resume_versions.insert_one({
+            "resume_id": f"res_{uuid.uuid4().hex[:10]}",
+            "source_ats_id": record["ats_id"],
+            "student_id": student_id,
+            "institution_id": record.get("institution_id"),
+            "version": previous_versions + 1,
+            "upload_date": record["created_at"],
+            "uploaded_filename": file.filename,
+            "ats_score": record.get("score"),
+            "keyword_score": record.get("keyword_match_pct"),
+            "missing_keywords": record.get("missing_keywords", []),
+            "recruiter_match_score": recruiter_match,
+            "format_score": record.get("format_score"),
+            "improvement_suggestions": [
+                f"Add role-specific evidence for {keyword}"
+                for keyword in (record.get("missing_keywords", []) or [])[:4]
+            ],
+            "created_at": record["created_at"],
+        })
     record.pop("_id", None)
     await _audit_log(
         "ats.uploaded",

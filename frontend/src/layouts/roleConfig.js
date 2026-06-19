@@ -33,6 +33,11 @@ export const roleConfig = {
       ]},
       { title: "Operations", items: [
         item("/institution/analytics", "Analytics engine", BarChart3, "analytics"),
+        item("/institution/outcomes", "Placement intelligence", BarChart3, "outcomes"),
+        item("/institution/dsa", "DSA intelligence", Code2, "dsa"),
+        item("/institution/aptitude", "Aptitude intelligence", Brain, "aptitude"),
+        item("/institution/ats", "Resume ATS", FileSearch, "ats"),
+        item("/institution/interviews", "Interview intelligence", MessageSquare, "interviews"),
         item("/institution/team", "Team & invites", UserPlus, "team"),
         item("/institution/mou", "MOU vault", FileText, "mou"),
         item("/institution/reports", "Reports · exports", FileBarChart, "reports"),
@@ -87,6 +92,7 @@ export const roleConfig = {
         item("/faculty/analytics", "Analytics engine", BarChart3, "analytics"),
         item("/faculty/dsa", "DSA analytics", Code2, "dsa"),
         item("/faculty/aptitude", "Aptitude analytics", Brain, "aptitude"),
+        item("/faculty/ats", "Resume ATS", FileSearch, "ats"),
         item("/faculty/interviews", "Interview reports", MessageSquare, "interviews"),
       ]},
     ],
@@ -99,6 +105,9 @@ export const roleConfig = {
       { title: "Readiness", items: [
         item("/student", "Home", LayoutDashboard, "home"),
         item("/student/dsa", "DSA tracker", Code2, "dsa"),
+        item("/student/aptitude", "Aptitude tracker", Brain, "aptitude"),
+        item("/student/ats", "Resume ATS", FileSearch, "ats"),
+        item("/student/interviews", "Interview prep", MessageSquare, "interviews"),
       ]},
       { title: "Opportunities", items: [
         item("/student/jobs", "Open drives", Briefcase, "jobs"),

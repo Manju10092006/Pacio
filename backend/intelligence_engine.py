@@ -106,8 +106,10 @@ async def build_student_readiness(db: Any, student: dict, *, now: Optional[datet
     dsa_question_rows = await db.dsa_question_progress.find({"student_id": student_id}, {"_id": 0}).to_list(1000)
     dsa_catalog_total = await db.dsa_questions.count_documents({})
     dsa_rows = await db.dsa_progress.find({"student_id": student_id}, {"_id": 0}).to_list(1000)
+    aptitude_question_rows = await db.aptitude_question_progress.find({"student_id": student_id}, {"_id": 0}).to_list(1000)
     aptitude_rows = await db.aptitude_scores.find({"student_id": student_id}, {"_id": 0}).to_list(1000)
     ats_rows = await db.ats_reports.find({"student_id": student_id}, {"_id": 0}).sort("created_at", -1).limit(5).to_list(5)
+    resume_versions = await db.resume_versions.find({"student_id": student_id}, {"_id": 0}).sort("version", -1).limit(5).to_list(5)
     interview_rows = await db.interview_reports.find({"student_id": student_id}, {"_id": 0}).sort("conducted_at", -1).limit(20).to_list(20)
     application_rows = await db.applications.find({"student_id": student_id}, {"_id": 0}).sort("applied_at", -1).limit(50).to_list(50)
 
@@ -125,17 +127,28 @@ async def build_student_readiness(db: Any, student: dict, *, now: Optional[datet
     dsa_dates = [_parse_dt(row.get("last_solved_at")) or _parse_dt(row.get("updated_at")) for row in dsa_activity_rows]
     dsa_dates = [date for date in dsa_dates if date]
 
-    aptitude_score_avg = _avg([row.get("score_pct", 0) or 0 for row in aptitude_rows])
-    aptitude_accuracy = _avg([row.get("accuracy_pct", 0) or 0 for row in aptitude_rows])
-    aptitude_time = _avg([row.get("avg_time_sec", 0) or 0 for row in aptitude_rows])
-    speed_score = _clamp(100 - max(0, aptitude_time - 45) * 1.15) if aptitude_rows else 0
-    aptitude_score = (aptitude_score_avg * 0.65) + (aptitude_accuracy * 0.25) + (speed_score * 0.10)
-    aptitude_dates = [_parse_dt(row.get("attempted_at")) for row in aptitude_rows]
+    if aptitude_question_rows:
+        aptitude_score_avg = _avg([row.get("mastery_score", 0) or 0 for row in aptitude_question_rows])
+        aptitude_accuracy = _avg([row.get("accuracy", 0) or 0 for row in aptitude_question_rows])
+        aptitude_time = _avg([row.get("average_time", 0) or 0 for row in aptitude_question_rows])
+        speed_score = _avg([row.get("speed", 0) or 0 for row in aptitude_question_rows])
+        solved_questions = sum(1 for row in aptitude_question_rows if row.get("solved"))
+        attempted_questions = sum(1 for row in aptitude_question_rows if row.get("attempted"))
+        aptitude_score = (aptitude_score_avg * 0.55) + (aptitude_accuracy * 0.25) + (speed_score * 0.15) + (min(100, solved_questions / max(1, attempted_questions) * 100) * 0.05)
+        aptitude_dates = [_parse_dt(row.get("last_attempted")) for row in aptitude_question_rows]
+    else:
+        aptitude_score_avg = _avg([row.get("score_pct", 0) or 0 for row in aptitude_rows])
+        aptitude_accuracy = _avg([row.get("accuracy_pct", 0) or 0 for row in aptitude_rows])
+        aptitude_time = _avg([row.get("avg_time_sec", 0) or 0 for row in aptitude_rows])
+        speed_score = _clamp(100 - max(0, aptitude_time - 45) * 1.15) if aptitude_rows else 0
+        aptitude_score = (aptitude_score_avg * 0.65) + (aptitude_accuracy * 0.25) + (speed_score * 0.10)
+        aptitude_dates = [_parse_dt(row.get("attempted_at")) for row in aptitude_rows]
     aptitude_dates = [date for date in aptitude_dates if date]
 
+    latest_resume = resume_versions[0] if resume_versions else None
     latest_ats = ats_rows[0] if ats_rows else None
-    ats_score = latest_ats.get("score", 0) if latest_ats else student.get("ats_score", 0)
-    ats_dates = [_parse_dt(row.get("created_at")) for row in ats_rows]
+    ats_score = latest_resume.get("ats_score", 0) if latest_resume else latest_ats.get("score", 0) if latest_ats else student.get("ats_score", 0)
+    ats_dates = [_parse_dt(row.get("upload_date")) for row in resume_versions] + [_parse_dt(row.get("created_at")) for row in ats_rows]
     ats_dates = [date for date in ats_dates if date]
 
     interview_scores: list[float] = []
@@ -160,8 +173,8 @@ async def build_student_readiness(db: Any, student: dict, *, now: Optional[datet
     all_activity_dates = dsa_dates + aptitude_dates + ats_dates + interview_dates + application_dates
     active_pillars = sum([
         bool(dsa_question_rows or dsa_rows),
-        bool(aptitude_rows),
-        bool(ats_rows),
+        bool(aptitude_question_rows or aptitude_rows),
+        bool(resume_versions or ats_rows),
         bool(interview_rows),
         bool(application_rows),
     ])
@@ -238,13 +251,19 @@ async def build_student_readiness(db: Any, student: dict, *, now: Optional[datet
                 "avg_accuracy": round(aptitude_accuracy, 1),
                 "avg_time_sec": round(aptitude_time, 1),
                 "speed_score": round(speed_score, 1),
+                "question_rows": len(aptitude_question_rows),
+                "revision_due": sum(1 for row in aptitude_question_rows if row.get("revision_due")),
                 "last_activity_at": max(aptitude_dates).isoformat() if aptitude_dates else None,
             },
             "ats": {
                 "score": round(ats_score or 0, 1),
-                "source": "latest_report" if latest_ats else "profile_fallback",
+                "source": "resume_version" if latest_resume else "latest_report" if latest_ats else "profile_fallback",
+                "resume_id": latest_resume.get("resume_id") if latest_resume else None,
+                "version": latest_resume.get("version") if latest_resume else None,
+                "keyword_score": latest_resume.get("keyword_score") if latest_resume else latest_ats.get("keyword_match_pct") if latest_ats else None,
+                "recruiter_match_score": latest_resume.get("recruiter_match_score") if latest_resume else None,
                 "latest_report_id": latest_ats.get("ats_id") if latest_ats else None,
-                "missing_keywords": latest_ats.get("missing_keywords", []) if latest_ats else [],
+                "missing_keywords": latest_resume.get("missing_keywords", []) if latest_resume else latest_ats.get("missing_keywords", []) if latest_ats else [],
                 "last_activity_at": max(ats_dates).isoformat() if ats_dates else None,
             },
             "interview": {

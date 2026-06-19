@@ -4931,6 +4931,480 @@ async def remove_institution_user(
     return {"ok": True}
 
 
+# ============== PARTNER INTELLIGENCE WORKFLOWS ==============
+def _parse_dt(value: Optional[str]) -> Optional[datetime]:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except Exception:
+        return None
+
+
+def _grade_from_score(score: float) -> str:
+    if score >= 90:
+        return "A+"
+    if score >= 80:
+        return "A"
+    if score >= 65:
+        return "B"
+    if score >= 50:
+        return "C"
+    if score >= 35:
+        return "D"
+    return "F"
+
+
+def _label_from_score(score: float) -> str:
+    if score >= 85:
+        return "Excellent"
+    if score >= 70:
+        return "Good"
+    if score >= 55:
+        return "Average"
+    if score >= 40:
+        return "Below Average"
+    return "Poor"
+
+
+def _weighted_score(factors: list[dict]) -> int:
+    total_weight = sum(float(f.get("weight", 0)) for f in factors) or 1
+    raw = sum(float(f.get("value", 0)) * float(f.get("weight", 0)) for f in factors) / total_weight
+    return int(max(0, min(100, round(raw))))
+
+
+async def _compute_institution_health(institution_id: str) -> dict:
+    now = datetime.now(timezone.utc)
+    students = await db.students.find({"institution_id": institution_id}, {"_id": 0}).to_list(5000)
+    total_students = len(students)
+    placed_students = sum(1 for s in students if s.get("placement", {}).get("placed"))
+    placement_rate = round((placed_students / total_students) * 100) if total_students else 0
+
+    cohorts = await db.training_programs.find({"institution_id": institution_id}, {"_id": 0}).to_list(500)
+    active_cohorts = [c for c in cohorts if c.get("status") != "upcoming"]
+    training_completion = round(sum(float(c.get("completion_pct", 0)) for c in active_cohorts) / len(active_cohorts)) if active_cohorts else 0
+
+    thirty_days_ago = (now - timedelta(days=30)).isoformat()
+    comm_logs = await db.comm_log.find({"institution_id": institution_id, "at": {"$gte": thirty_days_ago}}, {"_id": 0}).to_list(200)
+    comm_score = min(100, round((len(comm_logs) / 10) * 100))
+
+    mou = await db.mous.find_one({"institution_id": institution_id}, {"_id": 0}) or {}
+    expires_on = _parse_dt(mou.get("expires_on"))
+    if not mou:
+        mou_status = "none"
+    elif expires_on and expires_on < now:
+        mou_status = "expired"
+    elif expires_on and (expires_on - now).days <= 30:
+        mou_status = "expiring"
+    else:
+        mou_status = mou.get("status") or "active"
+    mou_score = 100 if mou_status == "active" else 50 if mou_status == "expiring" else 0
+
+    one_year_ago = (now - timedelta(days=365)).isoformat()
+    fdp_sessions = await db.fdp_sessions.find({"institution_id": institution_id, "date": {"$gte": one_year_ago}}, {"_id": 0}).to_list(200)
+    fdp_score = min(100, round((len(fdp_sessions) / 5) * 100))
+
+    revenue_rows = await db.revenue_share.find({"institution_id": institution_id}, {"_id": 0}).to_list(200)
+    revenue_this_year = sum(float(r.get("share_amount", 0) or r.get("amount", 0) or 0) for r in revenue_rows)
+    if not revenue_this_year:
+        revenue_this_year = float(mou.get("accrued_share_inr", 0) or 0)
+    expected_revenue = float((mou.get("seats_purchased") or max(total_students, 1)) * 15000)
+    revenue_score = min(100, round((revenue_this_year / expected_revenue) * 100)) if expected_revenue else 0
+
+    factors = [
+        {"label": "Placement Rate", "value": placement_rate, "weight": 0.30, "contribution": placement_rate * 0.30, "detail": f"{placed_students} placed of {total_students} students"},
+        {"label": "Training Completion", "value": training_completion, "weight": 0.25, "contribution": training_completion * 0.25, "detail": f"Average {training_completion}% across {len(active_cohorts)} cohorts"},
+        {"label": "Communication Activity", "value": comm_score, "weight": 0.15, "contribution": comm_score * 0.15, "detail": f"{len(comm_logs)} touchpoints in the last 30 days"},
+        {"label": "MOU Status", "value": mou_score, "weight": 0.15, "contribution": mou_score * 0.15, "detail": f"MOU status is {mou_status}"},
+        {"label": "FDP Participation", "value": fdp_score, "weight": 0.10, "contribution": fdp_score * 0.10, "detail": f"{len(fdp_sessions)} FDP sessions in the last 12 months"},
+        {"label": "Revenue Contribution", "value": revenue_score, "weight": 0.05, "contribution": revenue_score * 0.05, "detail": f"INR {int(revenue_this_year)} accrued vs INR {int(expected_revenue)} expected"},
+    ]
+    score = _weighted_score(factors)
+    result = {
+        "institution_id": institution_id,
+        "score": score,
+        "grade": _grade_from_score(score),
+        "label": _label_from_score(score),
+        "factors": factors,
+        "computed_at": now.isoformat(),
+    }
+    await db.institutions.update_one({"institution_id": institution_id}, {"$set": {"health_score": score, "health_label": result["label"], "health_computed_at": result["computed_at"]}})
+    await db.college_health_history.insert_one({
+        "history_id": f"health_{uuid.uuid4().hex[:10]}",
+        **result,
+    })
+    return result
+
+
+@app.get("/api/health-score/{institution_id}")
+async def institution_health_score(institution_id: str, user=Depends(require_roles("super_admin", "institution_admin", "tpo", "faculty"))):
+    if user["role"] != "super_admin" and institution_id != user.get("institution_id"):
+        raise HTTPException(403, "forbidden")
+    inst = await db.institutions.find_one({"institution_id": institution_id}, {"_id": 0})
+    if not inst:
+        raise HTTPException(404, "institution not found")
+    return await _compute_institution_health(institution_id)
+
+
+@app.post("/api/admin/recompute-health")
+async def recompute_health(request: Request, admin=Depends(require_roles("super_admin", "institution_admin", "tpo"))):
+    if admin["role"] == "super_admin":
+        institutions = await db.institutions.find({}, {"_id": 0}).to_list(500)
+    else:
+        institutions = await db.institutions.find({"institution_id": admin.get("institution_id")}, {"_id": 0}).to_list(1)
+    results = [await _compute_institution_health(inst["institution_id"]) for inst in institutions if inst.get("institution_id")]
+    await _audit_log("health_scores.recomputed", user=admin, institution_id=admin.get("institution_id"), resource="institution", metadata={"count": len(results)}, request=request)
+    return {"success": True, "count": len(results), "items": results}
+
+
+@app.post("/api/users/toggle-status")
+async def toggle_user_status(body: dict, request: Request, admin=Depends(require_roles("super_admin", "institution_admin", "tpo"))):
+    user_id = body.get("user_id") or body.get("userId")
+    if not user_id:
+        raise HTTPException(400, "user_id required")
+    target = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+    if not target:
+        raise HTTPException(404, "user not found")
+    if admin["role"] != "super_admin" and target.get("institution_id") != admin.get("institution_id"):
+        raise HTTPException(403, "forbidden")
+    status = str(body.get("new_status") or body.get("newStatus") or body.get("status") or "").lower()
+    approved = body.get("approved")
+    if approved is None:
+        approved = status not in {"inactive", "disabled", "blocked", "false", "0"}
+    await db.users.update_one({"user_id": user_id}, {"$set": {"approved": bool(approved), "status": "active" if approved else "inactive", "updated_at": datetime.now(timezone.utc).isoformat()}})
+    await _audit_log("user.status_toggled", user=admin, institution_id=target.get("institution_id"), resource="user", resource_id=user_id, metadata={"approved": bool(approved)}, request=request)
+    return {"success": True, "user_id": user_id, "approved": bool(approved)}
+
+
+async def _student_prediction_payload(student_id: str) -> dict:
+    student = await db.students.find_one({"student_id": student_id}, {"_id": 0})
+    if not student:
+        raise HTTPException(404, "student not found")
+    readiness = await build_student_readiness(db, student)
+    readiness_components = readiness.get("components", {})
+    component_score = lambda key: float((readiness_components.get(key) or {}).get("score", 0))
+    enrollments = await db.enrollments.find({"student_id": student_id}, {"_id": 0}).to_list(100)
+    training_completion = round(sum(float(e.get("completion_pct", 0)) for e in enrollments) / len(enrollments)) if enrollments else float(student.get("training_completion", 0) or 0)
+    aptitude_rows = await db.aptitude_scores.find({"student_id": student_id}, {"_id": 0}).to_list(50)
+    assessment_score = round(sum(float(a.get("score", 0)) for a in aptitude_rows) / len(aptitude_rows)) if aptitude_rows else component_score("aptitude")
+    dsa_score = component_score("dsa")
+    interview_score = component_score("interview")
+    attendance = float(student.get("attendance_pct", student.get("attendance", 86)))
+    cgpa = float(student.get("cgpa", 0))
+    factors = [
+        {"label": "Attendance", "value": attendance, "weight": 0.25, "contribution": attendance * 0.25, "detail": f"{attendance}%"},
+        {"label": "Training Completion", "value": training_completion, "weight": 0.25, "contribution": training_completion * 0.25, "detail": f"{training_completion}%"},
+        {"label": "Assessment Score", "value": assessment_score, "weight": 0.20, "contribution": assessment_score * 0.20, "detail": f"{assessment_score}/100"},
+        {"label": "DSA / Mock Interviews", "value": round((dsa_score + interview_score) / 2), "weight": 0.15, "contribution": round((dsa_score + interview_score) / 2) * 0.15, "detail": f"DSA {dsa_score}, interview {interview_score}"},
+        {"label": "CGPA", "value": min(100, round((cgpa / 10) * 100)), "weight": 0.15, "contribution": min(100, round((cgpa / 10) * 100)) * 0.15, "detail": f"{cgpa} CGPA"},
+    ]
+    probability = _weighted_score(factors)
+    band = 12.4 if probability >= 80 else 8.6 if probability >= 60 else 6.2 if probability >= 40 else 4.8
+    weak = sorted(readiness_components.items(), key=lambda kv: float((kv[1] or {}).get("score", 0)))[:3]
+    recommended = [name.replace("_", " ").title() for name, _ in weak] or ["Data Structures", "SQL", "Communication"]
+    return {
+        "student": {"student_id": student_id, "name": student.get("name"), "department": student.get("department"), "cgpa": cgpa},
+        "prediction": {
+            "probability": probability,
+            "expected_package_lpa": band,
+            "risk_level": "low" if probability >= 70 else "medium" if probability >= 40 else "high",
+            "recommended_skills": recommended,
+            "breakdown": factors,
+            "computed_at": datetime.now(timezone.utc).isoformat(),
+        },
+    }
+
+
+@app.get("/api/students/{student_id}/prediction")
+async def get_student_prediction(student_id: str, user=Depends(require_roles("super_admin", "institution_admin", "tpo", "faculty", "student"))):
+    payload = await _student_prediction_payload(student_id)
+    student = payload["student"]
+    if user["role"] == "student" and user.get("student_id") != student_id:
+        raise HTTPException(403, "forbidden")
+    if user["role"] not in {"super_admin", "student"} and student.get("department") and user.get("institution_id"):
+        full_student = await db.students.find_one({"student_id": student_id}, {"_id": 0})
+        if full_student and full_student.get("institution_id") != user.get("institution_id"):
+            raise HTTPException(403, "forbidden")
+    return payload
+
+
+@app.post("/api/students/predict")
+async def post_student_prediction(body: dict, user=Depends(require_roles("super_admin", "institution_admin", "tpo", "faculty", "student"))):
+    student_id = body.get("student_id") or body.get("studentId") or body.get("id") or user.get("student_id")
+    if not student_id:
+        raise HTTPException(400, "student_id required")
+    return await get_student_prediction(student_id, user)
+
+
+@app.get("/api/fdp/sessions")
+async def list_fdp_sessions(user=Depends(require_roles("super_admin", "institution_admin", "tpo", "faculty"))):
+    iid = user.get("institution_id") or "inst_kmit"
+    query = {} if user["role"] == "super_admin" else {"institution_id": iid}
+    return {"items": await db.fdp_sessions.find(query, {"_id": 0}).sort("date", -1).limit(200).to_list(200)}
+
+
+@app.post("/api/fdp/schedule")
+async def schedule_fdp(body: dict, request: Request, user=Depends(require_roles("super_admin", "institution_admin", "tpo"))):
+    iid = body.get("institution_id") if user["role"] == "super_admin" else user.get("institution_id")
+    if not iid:
+        raise HTTPException(400, "institution_id required")
+    now = datetime.now(timezone.utc).isoformat()
+    session = {
+        "session_id": f"fdp_{uuid.uuid4().hex[:10]}",
+        "institution_id": iid,
+        "title": body.get("title") or "Faculty Development Program",
+        "date": body.get("date") or now,
+        "duration_hours": float(body.get("duration_hours", body.get("durationHours", 2))),
+        "facilitator": body.get("facilitator") or user.get("name"),
+        "status": body.get("status") or "scheduled",
+        "attendance_count": int(body.get("attendance_count", 0) or 0),
+        "created_by": user["user_id"],
+        "created_at": now,
+    }
+    await db.fdp_sessions.insert_one(session)
+    await _audit_log("fdp.scheduled", user=user, institution_id=iid, resource="fdp_session", resource_id=session["session_id"], request=request)
+    return {"success": True, "item": session}
+
+
+@app.post("/api/fdp/attendance")
+async def mark_fdp_attendance(body: dict, request: Request, user=Depends(require_roles("super_admin", "institution_admin", "tpo", "faculty"))):
+    session_id = body.get("session_id") or body.get("sessionId")
+    if not session_id:
+        raise HTTPException(400, "session_id required")
+    session = await db.fdp_sessions.find_one({"session_id": session_id}, {"_id": 0})
+    if not session:
+        raise HTTPException(404, "session not found")
+    if user["role"] != "super_admin" and session.get("institution_id") != user.get("institution_id"):
+        raise HTTPException(403, "forbidden")
+    update = {
+        "attendance_count": int(body.get("attendance_count", body.get("attendanceCount", 0)) or 0),
+        "attendees": body.get("attendees", []),
+        "status": "completed",
+        "attendance_marked_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.fdp_sessions.update_one({"session_id": session_id}, {"$set": update})
+    await _audit_log("fdp.attendance_marked", user=user, institution_id=session.get("institution_id"), resource="fdp_session", resource_id=session_id, metadata=update, request=request)
+    return {"success": True, "session_id": session_id, **update}
+
+
+@app.post("/api/mou/renew")
+async def renew_mou(body: dict, request: Request, user=Depends(require_roles("super_admin", "institution_admin", "tpo"))):
+    iid = body.get("institution_id") if user["role"] == "super_admin" else user.get("institution_id")
+    if not iid:
+        raise HTTPException(400, "institution_id required")
+    now = datetime.now(timezone.utc)
+    expires_on = body.get("expires_on") or (now + timedelta(days=int(body.get("term_days", 365)))).isoformat()
+    update = {
+        "institution_id": iid,
+        "status": "active",
+        "signed_on": now.isoformat(),
+        "expires_on": expires_on,
+        "partnership_type": body.get("partnership_type") or body.get("partnershipType") or "External Placement Partner + CRT + FDP",
+        "seats_purchased": int(body.get("seats_purchased", body.get("seatsPurchased", 240))),
+        "revenue_share_pct": float(body.get("revenue_share_pct", body.get("revenueSharePct", 18))),
+        "renewed_by": user["user_id"],
+        "renewed_at": now.isoformat(),
+    }
+    await db.mous.update_one({"institution_id": iid}, {"$set": update}, upsert=True)
+    await _audit_log("mou.renewed", user=user, institution_id=iid, resource="mou", resource_id=iid, metadata=update, request=request)
+    return {"success": True, "item": await db.mous.find_one({"institution_id": iid}, {"_id": 0})}
+
+
+async def _create_system_notification(*, institution_id: Optional[str], type_: str, title: str, body: str, channels: Optional[list[str]] = None) -> dict:
+    item = {
+        "notification_id": f"notif_{uuid.uuid4().hex[:10]}",
+        "institution_id": institution_id,
+        "event": type_,
+        "type": type_,
+        "title": title,
+        "body": body,
+        "channels": channels or ["in_app"],
+        "status": "sent",
+        "read": False,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.notification_log.insert_one(item)
+    return item
+
+
+@app.post("/api/notifications/generate-alerts")
+async def generate_alerts(request: Request, user=Depends(require_roles("super_admin", "institution_admin", "tpo"))):
+    query = {} if user["role"] == "super_admin" else {"institution_id": user.get("institution_id")}
+    now = datetime.now(timezone.utc)
+    created: list[dict] = []
+    mous = await db.mous.find(query, {"_id": 0}).to_list(500)
+    for mou in mous:
+        exp = _parse_dt(mou.get("expires_on"))
+        if exp and 0 <= (exp - now).days <= 30:
+            created.append(await _create_system_notification(
+                institution_id=mou.get("institution_id"),
+                type_="mou.expiring",
+                title=f"MOU expiring in {(exp - now).days} days",
+                body=f"{mou.get('partnership_type', 'MOU')} expires on {exp.date().isoformat()}. Start renewal now.",
+                channels=["in_app", "email"] if (exp - now).days <= 10 else ["in_app"],
+            ))
+            await db.mous.update_one({"institution_id": mou.get("institution_id")}, {"$set": {"status": "expiring"}})
+    cohorts = await db.training_programs.find(query, {"_id": 0}).to_list(500)
+    for cohort in cohorts:
+        if float(cohort.get("completion_pct", 0)) < 50:
+            created.append(await _create_system_notification(
+                institution_id=cohort.get("institution_id"),
+                type_="training.low_completion",
+                title=f"Low training completion - {cohort.get('program_name')}",
+                body=f"{cohort.get('program_name')} is at {cohort.get('completion_pct')}% completion. Intervention recommended.",
+            ))
+    students = await db.students.find(query, {"_id": 0}).to_list(5000)
+    risk_by_iid: dict[str, int] = {}
+    for s in students:
+        score = (await build_student_readiness(db, s)).get("score", 0)
+        if score < 45:
+            risk_by_iid[s.get("institution_id")] = risk_by_iid.get(s.get("institution_id"), 0) + 1
+    for iid, count in risk_by_iid.items():
+        if iid and count >= 10:
+            created.append(await _create_system_notification(
+                institution_id=iid,
+                type_="student.high_risk_cluster",
+                title=f"{count} high-risk students detected",
+                body="Readiness engine found a concentrated risk cluster. Review coaching and training plans.",
+                channels=["in_app", "email"],
+            ))
+    await _audit_log("notifications.alerts_generated", user=user, institution_id=user.get("institution_id"), resource="notification", metadata={"created": len(created)}, request=request)
+    return {"success": True, "created": len(created), "items": created}
+
+
+@app.post("/api/notifications/broadcast")
+async def broadcast_notification(body: dict, request: Request, user=Depends(require_roles("super_admin", "institution_admin", "tpo"))):
+    iid = body.get("institution_id") if user["role"] == "super_admin" else user.get("institution_id")
+    title = body.get("title")
+    message = body.get("body") or body.get("message")
+    if not title or not message:
+        raise HTTPException(400, "title and body required")
+    item = await _create_system_notification(institution_id=iid, type_=body.get("type", "broadcast"), title=title, body=message, channels=body.get("channels") or ["in_app"])
+    await db.announcements.insert_one({
+        "announcement_id": f"ann_{uuid.uuid4().hex[:10]}",
+        "institution_id": iid,
+        "title": title,
+        "body": message,
+        "kind": body.get("type", "broadcast"),
+        "by_role": user.get("role"),
+        "pinned": bool(body.get("pinned", False)),
+        "created_at": item["created_at"],
+    })
+    if iid:
+        await ws_manager.broadcast(iid, {"type": "notification.broadcast", "title": title, "body": message, "ts": item["created_at"]})
+    await _audit_log("notifications.broadcast", user=user, institution_id=iid, resource="notification", resource_id=item["notification_id"], request=request)
+    return {"success": True, "item": item}
+
+
+@app.post("/api/notifications/mark-read")
+async def mark_notifications_read(body: dict, user=Depends(get_session_user)):
+    ids = body.get("ids") or body.get("notification_ids") or []
+    if isinstance(ids, str):
+        ids = [ids]
+    if not ids:
+        query = {"institution_id": user.get("institution_id")} if user.get("role") != "super_admin" else {}
+        items = await db.notification_log.find(query, {"_id": 0}).limit(200).to_list(200)
+        ids = [i.get("notification_id") for i in items if i.get("notification_id")]
+    count = 0
+    for notification_id in ids:
+        result = await db.notification_log.update_one({"notification_id": notification_id}, {"$set": {"read": True, "read_at": datetime.now(timezone.utc).isoformat()}})
+        count += getattr(result, "modified_count", 0)
+    return {"success": True, "updated": count}
+
+
+@app.post("/api/revenue/approve-payout")
+async def approve_revenue_payout(body: dict, request: Request, user=Depends(require_roles("super_admin", "institution_admin"))):
+    iid = body.get("institution_id") if user["role"] == "super_admin" else user.get("institution_id")
+    payout_id = body.get("payout_id") or body.get("payoutId") or f"payout_{uuid.uuid4().hex[:10]}"
+    amount = float(body.get("amount", 0) or 0)
+    period = body.get("period") or datetime.now(timezone.utc).strftime("%Y-Q%q").replace("%q", str((datetime.now(timezone.utc).month - 1) // 3 + 1))
+    payout = {
+        "payout_id": payout_id,
+        "institution_id": iid,
+        "amount": amount,
+        "period": period,
+        "status": "paid",
+        "approved_by": user["user_id"],
+        "approved_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.payouts.update_one({"payout_id": payout_id}, {"$set": payout}, upsert=True)
+    if iid:
+        await db.mous.update_one({"institution_id": iid}, {"$set": {"payout_status": f"Paid - {period}", "last_payout_at": payout["approved_at"]}})
+    await _audit_log("revenue.payout_approved", user=user, institution_id=iid, resource="payout", resource_id=payout_id, metadata={"amount": amount, "period": period}, request=request)
+    return {"success": True, "item": payout}
+
+
+@app.post("/api/reports/create")
+async def create_report_run(body: dict, request: Request, user=Depends(require_roles("super_admin", "institution_admin", "tpo", "faculty"))):
+    iid = body.get("institution_id") if user["role"] == "super_admin" else user.get("institution_id")
+    report = {
+        "report_id": f"report_{uuid.uuid4().hex[:10]}",
+        "institution_id": iid,
+        "type": body.get("type", "placement"),
+        "status": "created",
+        "title": body.get("title") or f"{body.get('type', 'placement').title()} report",
+        "created_by": user["user_id"],
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "filters": body.get("filters", {}),
+    }
+    await db.report_runs.insert_one(report)
+    await _audit_log("report.created", user=user, institution_id=iid, resource="report", resource_id=report["report_id"], request=request)
+    return {"success": True, "item": report}
+
+
+@app.post("/api/reports/generate")
+async def generate_report_run(body: dict, request: Request, user=Depends(require_roles("super_admin", "institution_admin", "tpo", "faculty"))):
+    report_id = body.get("report_id") or body.get("reportId")
+    if report_id:
+        report = await db.report_runs.find_one({"report_id": report_id}, {"_id": 0})
+        if not report:
+            raise HTTPException(404, "report not found")
+    else:
+        report = (await create_report_run(body, request, user))["item"]
+        report_id = report["report_id"]
+    iid = report.get("institution_id") or user.get("institution_id") or "inst_kmit"
+    overview = await _institution_overview_for_reports(iid)
+    generated = {
+        "status": "generated",
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "summary": {
+            "placement_rate": overview.get("placement_rate"),
+            "students": overview.get("students"),
+            "placed": overview.get("placed"),
+            "offers": overview.get("offers"),
+        },
+        "exports": {
+            "placement_pdf": "/api/reports/placement.pdf",
+            "training_pdf": "/api/reports/training.pdf",
+            "students_csv": "/api/reports/students.csv",
+        },
+    }
+    await db.report_runs.update_one({"report_id": report_id}, {"$set": generated})
+    await _audit_log("report.generated", user=user, institution_id=iid, resource="report", resource_id=report_id, metadata=generated["summary"], request=request)
+    return {"success": True, "item": {**report, **generated}}
+
+
+@app.post("/api/college/action")
+async def college_action(body: dict, request: Request, admin=Depends(require_roles("super_admin"))):
+    institution_id = body.get("institution_id") or body.get("college_id") or body.get("collegeId")
+    action = body.get("action")
+    if not institution_id or not action:
+        raise HTTPException(400, "institution_id and action required")
+    status_by_action = {
+        "approve": {"approved": True, "status": "active"},
+        "activate": {"approved": True, "status": "active"},
+        "suspend": {"approved": True, "status": "suspended"},
+        "reject": {"approved": False, "status": "rejected"},
+    }
+    update = status_by_action.get(str(action).lower())
+    if not update:
+        raise HTTPException(400, "unsupported action")
+    update["updated_at"] = datetime.now(timezone.utc).isoformat()
+    await db.institutions.update_one({"institution_id": institution_id}, {"$set": update})
+    await _audit_log("institution.action", user=admin, institution_id=institution_id, resource="institution", resource_id=institution_id, metadata={"action": action, **update}, request=request)
+    return {"success": True, "institution_id": institution_id, **update}
+
+
 @app.get("/{full_path:path}")
 async def serve_frontend(full_path: str):
     if full_path.startswith("api/"):

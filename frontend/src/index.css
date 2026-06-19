@@ -33,6 +33,51 @@ body {
 .font-serif { font-family: 'Fraunces', Georgia, serif; }
 .font-mono { font-family: 'JetBrains Mono', ui-monospace, monospace; font-feature-settings: "tnum" 1; }
 
+/* TrainingPlacement homepage design utilities */
+.hero-gradient {
+  background: radial-gradient(120% 90% at 10% 0%, #e8400d 0%, #ffeed8 22%, #f7e3cb 38%, #d0b2ff 70%, #ffffff 92%);
+}
+
+.hero-gradient-soft {
+  background:
+    radial-gradient(80% 60% at -5% -10%, rgba(232, 64, 13, 0.55) 0%, rgba(255, 238, 216, 0.7) 22%, rgba(208, 178, 255, 0.55) 55%, rgba(255,255,255,0) 80%),
+    radial-gradient(60% 60% at 110% 10%, rgba(183, 239, 178, 0.45) 0%, rgba(255,255,255,0) 60%),
+    #ffffff;
+}
+
+.cool-gradient {
+  background:
+    radial-gradient(70% 60% at 100% 0%, rgba(226, 221, 253, 0.85) 0%, rgba(183, 239, 178, 0.35) 40%, rgba(255,255,255,0) 70%),
+    radial-gradient(60% 50% at 0% 100%, rgba(232, 64, 13, 0.15) 0%, rgba(255, 238, 216, 0.4) 35%, rgba(255,255,255,0) 70%),
+    #ffffff;
+}
+
+.tracking-hero { letter-spacing: -0.05em; }
+.tracking-display { letter-spacing: -0.04em; }
+.tracking-tight2 { letter-spacing: -0.02em; }
+.tracking-eyebrow { letter-spacing: 0.03em; }
+
+.ring-subtle {
+  box-shadow: rgba(17, 17, 17, 0.08) 0px 0px 0px 1px inset;
+}
+
+.shadow-card-xl {
+  box-shadow: rgba(17, 17, 17, 0.12) 0px 26px 60px -6px, rgba(17, 17, 17, 0.02) 0px 28px 28px -14px, rgba(17, 17, 17, 0.04) 0px 6px 6px -3px, rgba(17, 17, 17, 0.04) 0px 1px 1px -0.5px;
+}
+
+@keyframes marquee-left {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+@keyframes marquee-right {
+  0% { transform: translateX(-50%); }
+  100% { transform: translateX(0); }
+}
+.marquee-left { animation: marquee-left 60s linear infinite; }
+.marquee-right { animation: marquee-right 60s linear infinite; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
 /* Premium link underline */
 .ink-link {
   position: relative; display: inline-flex; align-items: center; gap: .5rem;
@@ -130,3 +175,88 @@ body {
 
 /* Editorial table */
 .table-row { display: grid; grid-template-columns: var(--cols); }
+
+/* ── Motionsites-inspired dark landing ── */
+.landing-dark {
+  --ms-bg: #050505;
+  --ms-surface: #111111;
+  --ms-surface-2: #1a1a1a;
+  --ms-border: rgba(255, 255, 255, 0.08);
+  --ms-text: #ffffff;
+  --ms-muted: rgba(255, 255, 255, 0.55);
+  background: var(--ms-bg);
+  color: var(--ms-text);
+}
+
+.landing-dark ::selection { background: #ff3b00; color: #fff; }
+
+.ms-hero-glow {
+  position: absolute;
+  inset: auto;
+  width: min(90vw, 720px);
+  height: 180px;
+  left: 50%;
+  transform: translateX(-50%);
+  top: 38%;
+  background: radial-gradient(ellipse at center, rgba(255, 59, 0, 0.45) 0%, rgba(236, 72, 153, 0.25) 35%, transparent 70%);
+  filter: blur(48px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.ms-card {
+  border: 1px solid var(--ms-border);
+  border-radius: 16px;
+  background: var(--ms-surface);
+  overflow: hidden;
+  transition: border-color 0.25s, transform 0.25s;
+}
+.ms-card:hover {
+  border-color: rgba(255, 255, 255, 0.16);
+  transform: translateY(-2px);
+}
+
+.ms-filter-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 9999px;
+  border: 1px solid var(--ms-border);
+  background: var(--ms-surface-2);
+  color: var(--ms-text);
+  font-size: 13px;
+  font-weight: 500;
+  transition: background 0.2s, border-color 0.2s;
+}
+.ms-filter-pill:hover { border-color: rgba(255, 255, 255, 0.2); background: #222; }
+
+.ms-cta-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 28px;
+  border-radius: 9999px;
+  background: #ffffff;
+  color: #0a0a0a;
+  font-size: 14px;
+  font-weight: 600;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.ms-cta-pill:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 40px rgba(255, 255, 255, 0.12);
+}
+
+.ms-logo-gradient {
+  background: linear-gradient(135deg, #ec4899 0%, #8b5cf6 50%, #f97316 100%);
+}
+
+@keyframes ms-marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+.ms-marquee-track {
+  animation: ms-marquee 40s linear infinite;
+}
+.ms-marquee-track:hover { animation-play-state: paused; }

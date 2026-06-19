@@ -2,12 +2,13 @@ import React, { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
-import { ArrowUpRight, ArrowRight, FileText, Users, Building2, Code2, Brain, MessageSquare, Send, BarChart3, GraduationCap, CalendarPlus, Megaphone, FileBarChart } from "lucide-react";
+import { ArrowUpRight, ArrowRight, CheckCircle2, ChevronRight, HelpCircle, Layers, Activity, Users, ShieldAlert, Code2, Briefcase, Database } from "lucide-react";
 import { api } from "../lib/api";
+import { Badge } from "../components/Primitives";
 
 gsap.registerPlugin(ScrollTrigger);
 
-/* ---- Split into chars (custom, no plugin) ---- */
+/* Split text into characters for editorial reveals */
 function splitChars(node) {
   if (!node || node.dataset.split === "1") return [];
   const text = node.textContent;
@@ -21,7 +22,7 @@ function splitChars(node) {
     }
     [...w].forEach((c) => {
       const s = document.createElement("span");
-      s.className = "split-char";
+      s.className = "split-char inline-block";
       s.textContent = c;
       node.appendChild(s);
       spans.push(s);
@@ -37,9 +38,15 @@ function NumberTicker({ value, decimals = 0, suffix = "", prefix = "", duration 
     if (!ref.current) return;
     const obj = { n: 0 };
     const tween = gsap.to(obj, {
-      n: value, duration, ease: "power3.out",
-      scrollTrigger: { trigger: ref.current, start: "top 88%" },
-      onUpdate() { ref.current.textContent = prefix + obj.n.toFixed(decimals) + suffix; },
+      n: value,
+      duration,
+      ease: "power3.out",
+      scrollTrigger: { trigger: ref.current, start: "top 90%" },
+      onUpdate() {
+        if (ref.current) {
+          ref.current.textContent = prefix + obj.n.toFixed(decimals) + suffix;
+        }
+      },
     });
     return () => tween.kill();
   }, [value, decimals, suffix, prefix, duration]);
@@ -50,8 +57,9 @@ export default function Landing() {
   const heroH1Ref = useRef(null);
   const heroSubRef = useRef(null);
   const storyRef = useRef(null);
-  const moduleRef = useRef(null);
+  const walkthroughRef = useRef(null);
   const [stats, setStats] = useState(null);
+  const [activeWalkthrough, setActiveWalkthrough] = useState(0);
 
   useEffect(() => {
     api.get("/public/landing-stats").then(({ data }) => setStats(data)).catch(() => {});
@@ -59,29 +67,40 @@ export default function Landing() {
 
   useEffect(() => {
     const ctx = gsap.context(() => {
-      // HERO — char-by-char reveal with stagger
+      // HERO character stagger reveal
       const heroChars = splitChars(heroH1Ref.current);
       gsap.set(heroChars, { yPercent: 110, opacity: 0 });
       gsap.to(heroChars, {
-        yPercent: 0, opacity: 1, duration: 1.1, ease: "expo.out",
-        stagger: { each: 0.012, from: "start" }, delay: 0.2,
+        yPercent: 0,
+        opacity: 1,
+        duration: 1.2,
+        ease: "power4.out",
+        stagger: 0.01,
+        delay: 0.1,
       });
-      // Subhead split (line-by-line via slice-line spans)
+
+      // Subhead lines reveal
       gsap.utils.toArray(".slice-line > span").forEach((el, i) => {
         gsap.fromTo(el, { yPercent: 105 }, {
-          yPercent: 0, duration: 1, ease: "expo.out", delay: 0.6 + i * 0.08,
+          yPercent: 0,
+          duration: 1,
+          ease: "power3.out",
+          delay: 0.5 + i * 0.08,
         });
       });
 
-      // Standard reveal-up
+      // Standard scroll reveal triggers
       gsap.utils.toArray(".reveal-up").forEach((el) => {
         gsap.to(el, {
-          opacity: 1, y: 0, duration: 1, ease: "expo.out",
-          scrollTrigger: { trigger: el, start: "top 90%" },
+          opacity: 1,
+          y: 0,
+          duration: 1,
+          ease: "power3.out",
+          scrollTrigger: { trigger: el, start: "top 92%" },
         });
       });
 
-      // STORY — pinned section reveals "spreadsheets → fog → OS"
+      // Pinned story timeline sequence
       const storySteps = gsap.utils.toArray(".story-step");
       if (storyRef.current && storySteps.length) {
         ScrollTrigger.create({
@@ -91,129 +110,143 @@ export default function Landing() {
           pin: ".story-pin",
           pinSpacing: false,
         });
-        storySteps.forEach((s, i) => {
+        storySteps.forEach((s) => {
           gsap.to(s, {
-            opacity: 1, y: 0, duration: 1, ease: "expo.out",
-            scrollTrigger: { trigger: s, start: "top 70%" },
+            opacity: 1,
+            y: 0,
+            duration: 1,
+            ease: "power3.out",
+            scrollTrigger: { trigger: s, start: "top 75%" },
           });
         });
       }
-
-      // Modules — bento staggered
-      if (moduleRef.current) {
-        gsap.utils.toArray(".module-card").forEach((el, i) => {
-          gsap.fromTo(el, { y: 60, opacity: 0 }, {
-            y: 0, opacity: 1, duration: 0.9, ease: "expo.out", delay: i * 0.03,
-            scrollTrigger: { trigger: el, start: "top 88%" },
-          });
-        });
-      }
-
-      // Parallax accent shape
-      gsap.utils.toArray(".parallax-mark").forEach((el) => {
-        gsap.to(el, {
-          yPercent: -30, ease: "none",
-          scrollTrigger: { trigger: el.parentElement, scrub: true, start: "top bottom", end: "bottom top" },
-        });
-      });
     });
     return () => ctx.revert();
   }, []);
 
+  const walkthroughSteps = [
+    {
+      title: "Placement Command Center",
+      role: "TPO / PLACEMENT OFFICERS",
+      desc: "Live recruiter pipelines, real-time readiness scoring, drive health monitors, and predictive placement forecasts.",
+      kpis: ["700+ Offers", "140+ Recruiters", "98% Drive Health"],
+    },
+    {
+      title: "Student Placement Workspace",
+      role: "STUDENTS",
+      desc: "Personal placement OS: Striver A2Z DSA sheet progress, keyword-aware ATS resume builders, and mock interview reports.",
+      kpis: ["DSA Analytics", "ATS Score Feedback", "AI Interview Rubrics"],
+    },
+    {
+      title: "Faculty Coaching Dashboard",
+      role: "FACULTY & MENTORS",
+      desc: "Weak-student intervention queues, batch aptitude stats, and code compilation tracking.",
+      kpis: ["Intervention Triggers", "Topic Speed & Accuracy", "DSA Comments"],
+    },
+    {
+      title: "Recruiter Workspace",
+      role: "PARTNER RECRUITERS",
+      desc: "Qualified talent pool queries, instant shortlist builder, conversion funnels, and automated interview calendars.",
+      kpis: ["Talent Screener", "ICS / Calendar Scheduling", "Recruiter CRM"],
+    }
+  ];
+
   return (
     <main className="bg-bone-100 text-ink-900 overflow-x-hidden">
-      {/* ===== TOP NAV ===== */}
+      {/* Navigation */}
       <nav className="fixed top-0 inset-x-0 z-50 glass border-b border-line">
         <div className="max-w-[1440px] mx-auto px-6 md:px-10 h-14 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-3" data-testid="brand-logo">
-            <div className="w-6 h-6 bg-ink-900 grid place-items-center"><div className="w-1.5 h-1.5 bg-accent" /></div>
+            <div className="w-6 h-6 bg-ink grid place-items-center"><div className="w-1.5 h-1.5 bg-accent" /></div>
             <span className="font-display font-bold tracking-tight text-[14px]">CareerOS</span>
-            <span className="font-mono text-[9px] tracking-[0.28em] text-ink-400 hidden md:inline">CAMPUS · INTELLIGENCE</span>
+            <span className="font-mono text-[9px] tracking-[0.28em] text-ink-400 hidden md:inline">PLACEMENT · LAYER</span>
           </Link>
-          <div className="hidden md:flex items-center gap-7 text-[13px]">
-            <a href="#story" className="ink-link">The fog</a>
-            <a href="#modules" className="ink-link">Operating system</a>
-            <a href="#data" className="ink-link">Live data</a>
-            <a href="#cta" className="ink-link">For institutions</a>
+          <div className="hidden lg:flex items-center gap-7 text-xs font-mono tracking-wider uppercase">
+            <a href="#spreadsheets" className="ink-link">Why spreadsheets fail</a>
+            <a href="#story" className="ink-link">The struggles</a>
+            <a href="#intelligence" className="ink-link">Intelligence</a>
+            <a href="#walkthrough" className="ink-link">Product Walkthrough</a>
+            <a href="#outcomes" className="ink-link">Outcomes</a>
           </div>
-          <Link to="/login" data-testid="nav-login-btn" className="group btn py-2 px-4 text-[13px]">
-            Sign in <ArrowUpRight size={13} className="group-hover:rotate-45 transition-transform" />
+          <Link to="/login" data-testid="nav-login-btn" className="group btn py-2 px-4 text-xs font-mono uppercase">
+            Sign In <ArrowUpRight size={13} className="group-hover:rotate-45 transition-transform" />
           </Link>
         </div>
       </nav>
 
-      {/* ===== HERO ===== */}
-      <section className="relative min-h-screen pt-28 pb-16 px-6 md:px-10 grain">
-        <div className="max-w-[1440px] mx-auto relative">
+      {/* Section 1: The Operating System For Placement Intelligence */}
+      <section className="relative min-h-screen pt-28 pb-16 px-6 md:px-10 grain flex flex-col justify-between">
+        <div className="max-w-[1440px] mx-auto w-full relative">
           <div className="flex items-center gap-3 mb-10 reveal-up" data-testid="hero-eyebrow-row">
-            <span className="pill">v3 / intelligence engine live / 7 institutions seeded</span>
-            <span className="font-mono text-[11px] text-ink-400 tracking-[0.18em]">CAREEROS / CAMPUS INTELLIGENCE</span>
+            <span className="pill pill-accent">V3 INTELLIGENCE COMMAND ACTIVE</span>
+            <span className="font-mono text-[10px] text-ink-400 tracking-[0.18em]">THE PLACEMENT LAYER</span>
           </div>
 
           <h1
             ref={heroH1Ref}
             data-testid="hero-h1"
-            className="font-display font-black tracking-tightest leading-[0.88] text-[15vw] md:text-[10.5vw] lg:text-[9vw]"
+            className="font-display font-black tracking-tightest leading-[0.88] text-[13vw] md:text-[9.5vw] lg:text-[8vw] uppercase"
           >
-            The operating system for placement intelligence.
+            The Operating System<br />For Placement Intelligence.
           </h1>
 
           <div className="mt-12 grid grid-cols-12 gap-8" ref={heroSubRef}>
             <div className="col-span-12 md:col-span-7">
-              <div className="font-serif text-xl md:text-2xl text-ink-700 leading-[1.45] max-w-2xl">
+              <div className="font-serif text-lg md:text-xl text-ink-700 leading-[1.45] max-w-xl">
                 <span className="slice-line"><span>Colleges run training. Companies run hiring.</span></span>
-                <span className="slice-line"><span><span className="text-ink-400">Between them sits a fog of spreadsheets,</span></span></span>
-                <span className="slice-line"><span><span className="text-ink-400">WhatsApp groups, and quarterly PDFs.</span></span></span>
+                <span className="slice-line"><span>Between them sits a fog of spreadsheets,</span></span>
+                <span className="slice-line"><span>WhatsApp groups, and quarterly PDFs.</span></span>
                 <span className="slice-line"><span>CareerOS is the layer that makes it institutional.</span></span>
               </div>
-              <div className="mt-10 flex flex-wrap items-center gap-3">
+              <div className="mt-8 flex flex-wrap items-center gap-3">
                 <Link to="/login" data-testid="hero-cta-primary" className="group btn">
-                  Open the command center
+                  Open Command Center
                   <ArrowRight size={15} className="group-hover:translate-x-1 transition-transform" />
                 </Link>
-                <a href="#story" data-testid="hero-cta-secondary" className="btn btn-ghost">
-                  See the storyline
+                <a href="#spreadsheets" data-testid="hero-cta-secondary" className="btn btn-ghost border border-line-strong">
+                  Explore Narrative
                 </a>
               </div>
             </div>
-            <div className="col-span-12 md:col-span-5 md:col-start-9 self-end space-y-5 reveal-up">
+
+            <div className="col-span-12 md:col-span-5 md:col-start-8 self-end space-y-6 reveal-up">
               <div className="hairline" />
-              <div className="grid grid-cols-2 gap-6">
+              <div className="grid grid-cols-2 gap-4">
                 <div data-testid="hero-stat-offers">
-                  <div className="font-mono text-[10px] tracking-[0.24em] text-ink-400">AY · 2025–26</div>
-                  <div className="font-display text-5xl mt-2"><NumberTicker value={702} /></div>
-                  <div className="text-sm text-ink-500 mt-1">offers across 148 recruiters</div>
+                  <div className="font-mono text-[9px] tracking-[0.24em] text-ink-400">AY · 2025–26</div>
+                  <div className="font-display text-4xl mt-2"><NumberTicker value={702} /></div>
+                  <div className="text-xs text-ink-500 font-serif mt-1">offers across 148 recruiters</div>
                 </div>
                 <div data-testid="hero-stat-top">
-                  <div className="font-mono text-[10px] tracking-[0.24em] text-ink-400">TOP OFFER</div>
-                  <div className="font-display text-5xl mt-2"><NumberTicker value={80} prefix="₹" suffix="L" /></div>
-                  <div className="text-sm text-ink-500 mt-1">Amazon · SDE</div>
+                  <div className="font-mono text-[9px] tracking-[0.24em] text-ink-400">TOP OFFER</div>
+                  <div className="font-display text-4xl mt-2"><NumberTicker value={80} prefix="₹" suffix="L" /></div>
+                  <div className="text-xs text-ink-500 font-serif mt-1">Amazon · SDE</div>
                 </div>
                 <div data-testid="hero-stat-students">
-                  <div className="font-mono text-[10px] tracking-[0.24em] text-ink-400">SEEDED</div>
-                  <div className="font-display text-5xl mt-2"><NumberTicker value={stats?.totals?.students || 470} /></div>
-                  <div className="text-sm text-ink-500 mt-1">student records</div>
+                  <div className="font-mono text-[9px] tracking-[0.24em] text-ink-400">SEEDED RECORDS</div>
+                  <div className="font-display text-4xl mt-2"><NumberTicker value={stats?.totals?.students || 470} /></div>
+                  <div className="text-xs text-ink-500 font-serif mt-1">student analytics profiles</div>
                 </div>
                 <div data-testid="hero-stat-inst">
-                  <div className="font-mono text-[10px] tracking-[0.24em] text-ink-400">INSTITUTIONS</div>
-                  <div className="font-display text-5xl mt-2"><NumberTicker value={stats?.totals?.institutions || 7} /></div>
-                  <div className="text-sm text-ink-500 mt-1">across streams</div>
+                  <div className="font-mono text-[9px] tracking-[0.24em] text-ink-400">PARTNER INSTITUTIONS</div>
+                  <div className="font-display text-4xl mt-2"><NumberTicker value={stats?.totals?.institutions || 7} /></div>
+                  <div className="text-xs text-ink-500 font-serif mt-1">fully scoped campus hubs</div>
                 </div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Recruiter marquee */}
-        <div className="mt-20 border-t border-line pt-5 overflow-hidden">
-          <div className="font-mono text-[10px] tracking-[0.24em] text-ink-400 px-6 md:px-10 mb-3">PARTNER RECRUITERS · LIVE</div>
+        {/* Live recruiter marquee */}
+        <div className="mt-16 border-t border-line pt-4 overflow-hidden">
+          <div className="font-mono text-[9px] tracking-[0.24em] text-ink-400 px-6 md:px-10 mb-2">PARTNER RECRUITERS · CONNECTED</div>
           <div className="overflow-hidden">
             <div className="flex marquee-track whitespace-nowrap will-change-transform">
               {[...Array(2)].map((_, k) => (
                 <div key={k} className="flex items-center gap-14 px-8 shrink-0">
                   {["Amazon","Google","Microsoft","Salesforce","ServiceNow","Adobe","Goldman Sachs","Intuit","Walmart Global Tech","DE Shaw","Cisco","JP Morgan","Nvidia","Oracle","SAP","Atlassian","Uber","Deloitte","Accenture","TCS","Infosys","ZS Associates","Capgemini"].map((c) => (
-                    <span key={`${k}-${c}`} className="font-display text-3xl md:text-4xl font-bold tracking-tight text-ink-900 inline-flex items-center gap-3">
-                      <span>{c}</span>
+                    <span key={`${k}-${c}`} className="font-display text-2xl md:text-3xl font-bold tracking-tight text-ink inline-flex items-center gap-3">
+                      <span>{c.toUpperCase()}</span>
                       <span className="w-1.5 h-1.5 bg-accent" />
                     </span>
                   ))}
@@ -224,30 +257,59 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ===== STORY (pinned) ===== */}
-      <section id="story" ref={storyRef} className="relative px-6 md:px-10 py-24 bg-bone-50 border-t border-b border-line">
+      {/* Section 2: Why spreadsheets fail */}
+      <section id="spreadsheets" className="relative px-6 md:px-10 py-24 bg-paper border-t border-b border-line">
+        <div className="max-w-[1440px] mx-auto grid grid-cols-12 gap-8 items-center">
+          <div className="col-span-12 md:col-span-6 space-y-6">
+            <Badge variant="solid">THE EXCEL PARADOX</Badge>
+            <h2 className="font-display text-5xl tracking-tightest leading-[0.9] uppercase">
+              Spreadsheets fail<br />under coordination.
+            </h2>
+            <p className="font-serif text-lg text-ink-600 max-w-lg leading-relaxed">
+              When thousands of student details, interview slots, ATS logs, and recruiter feedback pipelines are updated simultaneously across departments, static sheets fall apart. Data gets out of date, messages get missed, and readiness remains completely invisible.
+            </p>
+          </div>
+          <div className="col-span-12 md:col-span-6 grid grid-cols-2 gap-4">
+            {[
+              { title: "Disconnected Data", desc: "Training updates live in separate logs from hiring drives, resulting in manual entry lag." },
+              { title: "Zero Telemetry", desc: "No tracker captures how long a student spent on a DSA challenge or their interview confidence delta." },
+              { title: "Audit Exposure", desc: "Recruiter contacts, MOU expiry timers, and contract SLAs are lost in faculty memory." },
+              { title: "Delayed Decisions", desc: "Placements happen, but forecasting reports take weeks to build and export manually." }
+            ].map((col, idx) => (
+              <div key={idx} className="border border-line-strong p-6 bg-bone-100/50 flex flex-col justify-between">
+                <div className="w-6 h-6 bg-ink grid place-items-center text-bone font-mono text-[10px]">{idx + 1}</div>
+                <div className="mt-6">
+                  <h4 className="font-display text-lg tracking-tight uppercase font-bold">{col.title}</h4>
+                  <p className="text-xs text-ink-500 font-serif mt-2 leading-relaxed">{col.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Section 3: Why placement cells struggle */}
+      <section id="story" ref={storyRef} className="relative px-6 md:px-10 py-24 bg-bone-50 border-b border-line">
         <div className="max-w-[1440px] mx-auto grid grid-cols-12 gap-8">
           <div className="story-pin col-span-12 md:col-span-4 self-start md:sticky md:top-24 h-fit">
-            <div className="font-mono text-[10px] tracking-[0.28em] text-ink-400">§ 01 · THE FOG</div>
-            <h2 className="font-display text-5xl md:text-6xl tracking-tightest mt-3 leading-[0.96]" data-testid="story-title">
-              Spreadsheets <span className="text-ink-400">don't scale</span>
-              <br />placement cells.
+            <div className="font-mono text-[9px] tracking-[0.28em] text-ink-400">§ THE CAMPUS CHALLENGE</div>
+            <h2 className="font-display text-5xl md:text-6xl tracking-tightest mt-3 leading-[0.96] uppercase" data-testid="story-title">
+              Why placement cells<br />struggle to scale.
             </h2>
             <p className="font-serif text-lg text-ink-500 mt-5 max-w-md">
-              Walk into any TPO office in India. You'll find the same setup —
-              one master Excel, a dozen WhatsApp groups, faculty memory, last-week's screenshot. CareerOS is the layer above.
+              Placement administration isn't about lack of effort—it's about lack of an integrated operating environment.
             </p>
           </div>
           <div className="col-span-12 md:col-span-8 space-y-32 pt-8">
             {[
-              { tag: "PAIN · 01", title: "Which student is actually placement-ready?", body: "Today: gut feel from faculty + CGPA. CareerOS: a composite Readiness Score combining DSA solve rate, ATS resume score, mock interview confidence, aptitude accuracy and project depth." },
-              { tag: "PAIN · 02", title: "Did the training program actually work?", body: "Today: anecdotes after results are out. CareerOS: module-level telemetry — completion %, drop-off, intervention triggers, before-after impact on placement rate." },
-              { tag: "PAIN · 03", title: "Who really hires from this campus?", body: "Today: a recruiter list someone forwarded. CareerOS: a live ledger of every recruiter × selection × CTC across a decade, queryable by department and year." },
-              { tag: "PAIN · 04", title: "Is our partnership healthy?", body: "Today: 'when does the MOU expire?' is a quarterly fire-drill. CareerOS: countdowns, seat utilization, accrued revenue share — audit-ready always." },
+              { tag: "DISRUPTION · 01", title: "Gut-feel student assessments", body: "TPOs currently assess placement readiness using CGPA. But CGPA doesn't tell if a student can build a clean React layout, solve a complex array problem, or perform confidently in front of a senior technical panel." },
+              { tag: "DISRUPTION · 02", title: "Unmeasurable training ROI", body: "Campus training programs cost lakhs of rupees, yet completion percentages and student progression rates are compiled manually weeks after the final drive has closed." },
+              { tag: "DISRUPTION · 03", title: "Opaque recruiter relationships", body: "Drives are scheduled on the fly, resume PDF versions are sent back and forth via email, and the status of recruiter selection pipelines remains a black box until the final offers are hand-delivered." },
+              { tag: "DISRUPTION · 04", title: "MOU compliance blindspots", body: "Institutional partnerships have active legal guidelines and revenue share clauses. When these live in file cabinets, renewals slip past and audit trails are nonexistent." },
             ].map((s, i) => (
               <div key={i} className="story-step opacity-0 translate-y-12" data-testid={`story-step-${i}`}>
-                <div className="font-mono text-[10px] tracking-[0.28em] text-accent">{s.tag}</div>
-                <h3 className="font-display text-4xl md:text-5xl tracking-tightest mt-3 leading-[0.96]">{s.title}</h3>
+                <div className="font-mono text-[9px] tracking-[0.28em] text-accent">{s.tag}</div>
+                <h3 className="font-display text-4xl md:text-5xl tracking-tightest mt-3 leading-[0.96] uppercase">{s.title}</h3>
                 <p className="font-serif text-lg text-ink-700 mt-4 max-w-xl">{s.body}</p>
               </div>
             ))}
@@ -255,138 +317,248 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ===== MODULES BENTO ===== */}
-      <section id="modules" ref={moduleRef} className="relative px-6 md:px-10 py-24 bg-ink-900 text-bone-100">
+      {/* Section 4: Why readiness is invisible */}
+      <section className="relative px-6 md:px-10 py-24 bg-paper border-b border-line">
+        <div className="max-w-[1440px] mx-auto text-center space-y-6">
+          <Badge variant="outline">THE LAGGING INDICATOR</Badge>
+          <h2 className="font-display text-5xl md:text-7xl tracking-tightest uppercase leading-[0.95] max-w-4xl mx-auto">
+            Why readiness is invisible<br />on the traditional roster.
+          </h2>
+          <p className="font-serif text-lg text-ink-500 max-w-2xl mx-auto">
+            A student's CGPA is a lag score. It measures historical academic exam marks, not present market capabilities. True placement readiness is a composite algorithm that aggregates five live vectors.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mt-12 text-left">
+            {[
+              { l: "DSA Mastery", desc: "Problems completed across 18 core topics and 474 problems of Striver A2Z sheet." },
+              { l: "ATS Score", desc: "A score on resume parser keyword density, format compatibility, and layout structure." },
+              { l: "Aptitude Speed", desc: "Avg speed and accuracy tracked across Quant, Reasoning, and Verbal ability sessions." },
+              { l: "Interview Rubric", desc: "Average confidence, communication, and technical depth scores from mock panels." },
+              { l: "Consistency index", desc: "Frequency and progression of active preparation over a rolling 30-day window." }
+            ].map((item, i) => (
+              <div key={i} className="border border-line-strong p-6 bg-bone-100/50 flex flex-col justify-between">
+                <span className="font-mono text-xs text-accent">VECTOR {String(i + 1).padStart(2, "0")}</span>
+                <div className="mt-4">
+                  <h4 className="font-display text-lg tracking-tight uppercase font-bold">{item.l}</h4>
+                  <p className="text-xs text-ink-500 font-serif mt-2 leading-relaxed">{item.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Sections 5, 6, 7, 8: The Intelligence Canvas */}
+      <section id="intelligence" className="relative px-6 md:px-10 py-24 bg-ink text-bone border-b border-line">
         <div className="max-w-[1440px] mx-auto">
           <div className="grid grid-cols-12 gap-8 mb-14">
             <div className="col-span-12 md:col-span-6">
-              <div className="font-mono text-[10px] tracking-[0.28em] text-bone-100/40">§ 02 · THE OPERATING SYSTEM</div>
-              <h2 className="font-display text-5xl md:text-7xl tracking-tightest mt-3 leading-[0.92]" data-testid="modules-title">
-                Thirteen modules. <span className="text-accent">One canvas.</span>
+              <div className="font-mono text-[9px] tracking-[0.28em] text-bone/45">§ THE INTELLIGENCE MATRIX</div>
+              <h2 className="font-display text-5xl md:text-7xl tracking-tightest mt-3 leading-[0.92] uppercase" data-testid="modules-title">
+                One integrated canvas.<br /><span className="text-accent">Zero spreadsheets.</span>
               </h2>
             </div>
             <div className="col-span-12 md:col-span-5 md:col-start-8 self-end">
-              <p className="font-serif text-lg text-bone-100/70" data-testid="modules-subtitle">
-                Each module replaces a workflow that currently lives in spreadsheets,
-                group chats or faculty memory. Together they form an institutional layer.
+              <p className="font-serif text-lg text-bone/70" data-testid="modules-subtitle">
+                CareerOS consolidates the entire placement operation into four key intelligence modules, each replacing dozens of manually compiled sheets.
               </p>
             </div>
           </div>
 
-          <div className="grid grid-cols-12 gap-3 auto-rows-[260px]">
-            {[
-              { code: "01", title: "Student Intelligence", body: "Composite readiness score from CGPA, skills, DSA, ATS and interviews.", icon: Users, span: "col-span-12 md:col-span-6 md:row-span-2", big: true },
-              { code: "02", title: "DSA Intelligence", body: "Striver A2Z tracker. Topic-level analytics, leaderboard, intervention triggers.", icon: Code2, span: "col-span-12 md:col-span-6" },
-              { code: "03", title: "Aptitude Intelligence", body: "Quant · Reasoning · Verbal · DI. Accuracy, speed, weakness map.", icon: Brain, span: "col-span-12 md:col-span-3" },
-              { code: "04", title: "Resume ATS", body: "Score, keyword gap, recruiter compatibility.", icon: FileText, span: "col-span-12 md:col-span-3" },
-              { code: "05", title: "Interview AI", body: "Confidence, communication, technical depth — score every mock.", icon: MessageSquare, span: "col-span-12 md:col-span-4" },
-              { code: "06", title: "Application Pipeline", body: "Applied → Shortlisted → Interview → Selected. Track every candidate.", icon: Send, span: "col-span-12 md:col-span-4" },
-              { code: "07", title: "Placement Intelligence", body: "Decade of offers, CTC trajectory, department win-rate.", icon: BarChart3, span: "col-span-12 md:col-span-4" },
-              { code: "08", title: "Recruiter Network", body: "Talent pool view, drive scheduling, hiring trends.", icon: Building2, span: "col-span-12 md:col-span-6" },
-              { code: "09", title: "Training Ops", body: "CRT · FDP · Communication. Module-level completion, instructor accountability.", icon: GraduationCap, span: "col-span-12 md:col-span-3" },
-              { code: "10", title: "MOU Vault", body: "Documents, renewal countdown, revenue share.", icon: FileText, span: "col-span-12 md:col-span-3" },
-              { code: "11", title: "Interview Scheduler", body: "Month, week and agenda views for drive coordination.", icon: CalendarPlus, span: "col-span-12 md:col-span-4" },
-              { code: "12", title: "Broadcast Engine", body: "Announcements, drive updates and training signals across roles.", icon: Megaphone, span: "col-span-12 md:col-span-4" },
-              { code: "13", title: "Reports Engine", body: "Board packets, CSV exports, audit logs and analytics snapshots.", icon: FileBarChart, span: "col-span-12 md:col-span-4" },
-            ].map((m) => (
-              <div key={m.code} data-testid={`module-${m.code}`}
-                className={`module-card opacity-0 ${m.span} border border-bone-100/15 hover:border-accent transition-colors p-6 flex flex-col justify-between relative overflow-hidden`}>
-                <div className="flex items-start justify-between">
-                  <span className="font-mono text-[10px] tracking-[0.24em] text-bone-100/40">§ {m.code}</span>
-                  <m.icon size={18} className="text-accent" />
-                </div>
-                <div>
-                  <h3 className={`font-display tracking-tight leading-[1] ${m.big ? "text-5xl md:text-6xl" : "text-2xl"}`}>{m.title}</h3>
-                  <p className={`text-bone-100/60 mt-3 ${m.big ? "text-base max-w-md" : "text-sm"}`}>{m.body}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ===== LIVE DATA / DECADE ===== */}
-      <section id="data" className="relative px-6 md:px-10 py-28 bg-bone-100">
-        <div className="parallax-mark absolute right-8 top-12 w-32 h-32 bg-accent opacity-90 hidden md:block" />
-        <div className="max-w-[1440px] mx-auto relative">
-          <div className="flex items-baseline justify-between mb-12">
-            <div>
-              <div className="font-mono text-[10px] tracking-[0.28em] text-ink-400">§ 03 · INSTITUTIONAL LIVE FEED</div>
-              <h2 className="font-display text-5xl md:text-7xl tracking-tightest mt-3" data-testid="data-title">A decade. <span className="text-ink-400">On one canvas.</span></h2>
-            </div>
-            <Link to="/login" className="hidden md:inline-flex items-center gap-2 font-mono text-xs tracking-[0.2em] text-ink-700 hover:text-accent">VIEW FULL DATASET <ArrowUpRight size={14} /></Link>
-          </div>
           <div className="grid grid-cols-12 gap-4">
-            {(stats?.years || []).slice(0, 9).reverse().slice(-9).map((y) => (
-              <div key={y.academic_year} className="col-span-12 sm:col-span-6 md:col-span-4 editorial p-7" data-testid={`year-${y.academic_year}`}>
-                <div className="font-mono text-[11px] text-ink-400 tracking-[0.2em]">AY · {y.academic_year}</div>
-                <div className="font-display text-6xl mt-3 tracking-tightest tnum"><NumberTicker value={y.offers} /></div>
-                <div className="text-sm text-ink-500 mt-1">offers · {y.companies} recruiters</div>
-                <div className="hairline my-5" />
-                <div className="flex items-end justify-between">
-                  <div>
-                    <div className="font-mono text-[10px] text-ink-400 tracking-[0.24em]">AVG</div>
-                    <div className="font-display text-2xl mt-1"><NumberTicker value={y.avg_lpa} decimals={2} prefix="₹" suffix="L" /></div>
-                  </div>
-                  <div className="text-right">
-                    <div className="font-mono text-[10px] text-ink-400 tracking-[0.24em]">TOP · {y.top_company?.toUpperCase?.()}</div>
-                    <div className="font-display text-2xl mt-1"><NumberTicker value={y.top_offer_lpa} decimals={1} prefix="₹" suffix="L" /></div>
-                  </div>
-                </div>
+            {/* Section 5: Student Intelligence */}
+            <div className="col-span-12 md:col-span-6 border border-bone/15 p-8 flex flex-col justify-between min-h-[300px]" data-testid="module-01">
+              <div className="flex items-start justify-between">
+                <span className="font-mono text-xs text-bone/45">MODULE 01 / STUDENT</span>
+                <Users className="text-accent" size={20} />
               </div>
-            ))}
+              <div>
+                <h3 className="font-display text-3xl tracking-tight uppercase mt-8">Student Intelligence</h3>
+                <p className="text-bone/60 text-sm font-serif mt-3">
+                  Consolidated readiness index derived in real-time from active prep vectors. Connects student academic history directly with active placement eligibility.
+                </p>
+              </div>
+            </div>
+
+            {/* Section 6: Training Intelligence */}
+            <div className="col-span-12 md:col-span-6 border border-bone/15 p-8 flex flex-col justify-between min-h-[300px]" data-testid="module-02">
+              <div className="flex items-start justify-between">
+                <span className="font-mono text-xs text-bone/45">MODULE 02 / TRAINING</span>
+                <Activity className="text-accent" size={20} />
+              </div>
+              <div>
+                <h3 className="font-display text-3xl tracking-tight uppercase mt-8">Training Intelligence</h3>
+                <p className="text-bone/60 text-sm font-serif mt-3">
+                  Classroom training completion metrics, automatic weak-student intervention cues, and speed/accuracy analytics.
+                </p>
+              </div>
+            </div>
+
+            {/* Section 7: Recruiter Intelligence */}
+            <div className="col-span-12 md:col-span-6 border border-bone/15 p-8 flex flex-col justify-between min-h-[300px]" data-testid="module-08">
+              <div className="flex items-start justify-between">
+                <span className="font-mono text-xs text-bone/45">MODULE 03 / RECRUITER</span>
+                <Briefcase className="text-accent" size={20} />
+              </div>
+              <div>
+                <h3 className="font-display text-3xl tracking-tight uppercase mt-8">Recruiter Intelligence</h3>
+                <p className="text-bone/60 text-sm font-serif mt-3">
+                  Recruiter candidate discovery, automated calendar schedules, and selection funnels. Elevates the student pipeline into a professional recruitment workspace.
+                </p>
+              </div>
+            </div>
+
+            {/* Section 8: Placement Intelligence */}
+            <div className="col-span-12 md:col-span-6 border border-bone/15 p-8 flex flex-col justify-between min-h-[300px]" data-testid="module-07">
+              <div className="flex items-start justify-between">
+                <span className="font-mono text-xs text-bone/45">MODULE 04 / PLACEMENT</span>
+                <Database className="text-accent" size={20} />
+              </div>
+              <div>
+                <h3 className="font-display text-3xl tracking-tight uppercase mt-8">Placement Intelligence</h3>
+                <p className="text-bone/60 text-sm font-serif mt-3">
+                  A multi-year ledger of drives, CTC package ranges, and department-wise outcomes, delivering data-driven forecasting directly to the TPO command center.
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* ===== TOP RECRUITERS LEDGER ===== */}
-      <section className="px-6 md:px-10 py-24 bg-bone-50">
+      {/* Section 9: Pinned product walkthrough */}
+      <section id="walkthrough" ref={walkthroughRef} className="relative px-6 md:px-10 py-24 bg-paper border-b border-line">
+        <div className="max-w-[1440px] mx-auto grid grid-cols-12 gap-8 items-start">
+          <div className="col-span-12 md:col-span-5 space-y-6 md:sticky md:top-24">
+            <Badge variant="solid">PRODUCT TOUR</Badge>
+            <h2 className="font-display text-5xl tracking-tightest leading-[0.9] uppercase">
+              Role Workspaces
+            </h2>
+            <p className="font-serif text-lg text-ink-600 max-w-md">
+              Every user role has an interface customized for their operational needs. Explore the four distinct interfaces.
+            </p>
+            <div className="space-y-2 pt-4">
+              {walkthroughSteps.map((step, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => setActiveWalkthrough(idx)}
+                  className={`w-full text-left p-4 border transition-all flex items-center justify-between font-mono text-xs uppercase tracking-wider ${
+                    activeWalkthrough === idx
+                      ? "bg-ink text-bone border-ink"
+                      : "bg-bone-100 hover:bg-bone-200 border-line-strong"
+                  }`}
+                >
+                  <span>{step.title}</span>
+                  <ChevronRight size={14} />
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="col-span-12 md:col-span-7 border border-line-strong p-8 bg-bone-50/50 space-y-6">
+            <div className="font-mono text-[10px] tracking-[0.24em] text-ink-400">
+              {walkthroughSteps[activeWalkthrough].role}
+            </div>
+            <h3 className="font-display text-3xl tracking-tight uppercase text-accent">
+              {walkthroughSteps[activeWalkthrough].title}
+            </h3>
+            <p className="font-serif text-base text-ink-600 leading-relaxed">
+              {walkthroughSteps[activeWalkthrough].desc}
+            </p>
+
+            <div className="grid grid-cols-3 gap-3 pt-6 border-t border-line-strong">
+              {walkthroughSteps[activeWalkthrough].kpis.map((kpi, i) => (
+                <div key={i} className="border border-line bg-paper p-4 text-center">
+                  <div className="font-mono text-[9px] text-ink-400">V3 STANDARD</div>
+                  <div className="font-display text-lg mt-2 truncate font-bold">{kpi}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Section 10: Live metrics */}
+      <section className="relative px-6 md:px-10 py-24 bg-bone-50 border-b border-line">
+        <div className="max-w-[1440px] mx-auto text-center space-y-8">
+          <div className="font-mono text-[10px] tracking-[0.28em] text-ink-400">§ TELEMETRY STREAM · ACTIVE</div>
+          <h2 className="font-display text-5xl md:text-7xl tracking-tightest uppercase leading-[0.95]">
+            Placement metrics,<br />measured in real-time.
+          </h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-5xl mx-auto pt-8">
+            <div className="border border-line-strong bg-paper p-8 text-center">
+              <div className="font-mono text-[10px] text-ink-400 tracking-[0.24em]">SEEDED STUDENTS</div>
+              <div className="font-display text-6xl mt-4 text-accent">
+                <NumberTicker value={stats?.totals?.students || 470} />
+              </div>
+            </div>
+            <div className="border border-line-strong bg-paper p-8 text-center">
+              <div className="font-mono text-[10px] text-ink-400 tracking-[0.24em]">ACTIVE DRIVES</div>
+              <div className="font-display text-6xl mt-4">
+                <NumberTicker value={stats?.totals?.jobs || 65} />
+              </div>
+            </div>
+            <div className="border border-line-strong bg-paper p-8 text-center">
+              <div className="font-mono text-[10px] text-ink-400 tracking-[0.24em]">PARTNER INSTITUTIONS</div>
+              <div className="font-display text-6xl mt-4">
+                <NumberTicker value={stats?.totals?.institutions || 7} />
+              </div>
+            </div>
+            <div className="border border-line-strong bg-paper p-8 text-center">
+              <div className="font-mono text-[10px] text-ink-400 tracking-[0.24em]">COMPLETED OUTCOMES</div>
+              <div className="font-display text-6xl mt-4">
+                <NumberTicker value={955} />
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Section 11: Institution outcomes */}
+      <section id="outcomes" className="px-6 md:px-10 py-24 bg-paper">
         <div className="max-w-[1440px] mx-auto">
           <div className="grid grid-cols-12 gap-8 mb-10">
             <div className="col-span-12 md:col-span-6">
-              <div className="font-mono text-[10px] tracking-[0.28em] text-ink-400">§ 04 · WHO ACTUALLY HIRES?</div>
-              <h2 className="font-display text-5xl md:text-6xl tracking-tightest mt-3 reveal-up">Every selection on record.</h2>
+              <div className="font-mono text-[10px] tracking-[0.28em] text-ink-400">§ LIVE LEDGER</div>
+              <h2 className="font-display text-5xl md:text-6xl tracking-tightest mt-3 uppercase">Top selections on record.</h2>
             </div>
             <div className="col-span-12 md:col-span-5 md:col-start-8 self-end">
-              <p className="font-serif text-lg text-ink-700">Pulled live from the placement layer. Sorted by all-time selections.</p>
+              <p className="font-serif text-lg text-ink-700">Pulled live from the placement database. Sorted by all-time selections.</p>
             </div>
           </div>
 
-          <div className="editorial">
-            <div className="grid grid-cols-12 px-6 py-3 border-b border-line font-mono text-[10px] tracking-[0.24em] text-ink-400">
+          <div className="editorial border border-line-strong bg-paper">
+            <div className="grid grid-cols-12 px-6 py-3 border-b border-line-strong bg-bone-100 font-mono text-[10px] tracking-[0.24em] text-ink-400 uppercase">
               <div className="col-span-1">#</div>
               <div className="col-span-5">RECRUITER</div>
               <div className="col-span-3 text-right">SELECTS · ALL TIME</div>
               <div className="col-span-3 text-right">MAX CTC</div>
             </div>
             {(stats?.top_recruiters || []).slice(0, 12).map((r, i) => (
-              <div key={r.company} className="grid grid-cols-12 px-6 py-5 border-b border-line items-center hover:bg-bone-200 transition-colors group" data-testid={`recruiter-row-${i}`}>
+              <div key={r.company} className="grid grid-cols-12 px-6 py-5 border-b border-line items-center hover:bg-bone-100/50 transition-colors group" data-testid={`recruiter-row-${i}`}>
                 <div className="col-span-1 font-mono text-sm text-ink-400">{String(i + 1).padStart(2, "0")}</div>
-                <div className="col-span-5 font-display text-2xl tracking-tight group-hover:text-accent transition-colors">{r.company}</div>
+                <div className="col-span-5 font-display text-2xl tracking-tight group-hover:text-accent transition-colors uppercase font-bold">{r.company}</div>
                 <div className="col-span-3 text-right font-mono text-lg tnum">{r.selects}</div>
-                <div className="col-span-3 text-right font-mono text-lg text-accent tnum">₹{r.max_ctc?.toFixed(1)}L</div>
+                <div className="col-span-3 text-right font-mono text-lg text-accent tnum font-bold">₹{r.max_ctc?.toFixed(1)}LPA</div>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ===== CTA ===== */}
-      <section id="cta" className="px-6 md:px-10 py-36 bg-ink-900 text-bone-100 relative overflow-hidden">
-        <div className="absolute inset-0 opacity-[0.06] pointer-events-none" style={{ backgroundImage: "linear-gradient(135deg, transparent 49.5%, #FF3B00 49.5%, #FF3B00 50.5%, transparent 50.5%)", backgroundSize: "60px 60px" }} />
+      {/* Section 12: Final CTA */}
+      <section id="cta" className="px-6 md:px-10 py-36 bg-ink text-bone relative overflow-hidden">
         <div className="max-w-[1440px] mx-auto relative">
-          <div className="font-mono text-[11px] tracking-[0.28em] text-bone-100/40">§ 05 · GET ACCESS</div>
-          <h2 className="font-display text-6xl md:text-[8vw] tracking-tightest leading-[0.9] mt-6 max-w-5xl">
-            Bring your placement cell <span className="text-accent">into the present.</span>
+          <div className="font-mono text-[11px] tracking-[0.28em] text-bone/45">§ GET ACCESS</div>
+          <h2 className="font-display text-6xl md:text-[8vw] tracking-tightest leading-[0.9] mt-6 max-w-5xl uppercase">
+            Bring your placement cell<br /><span className="text-accent">into the present.</span>
           </h2>
-          <p className="font-serif text-xl text-bone-100/70 mt-8 max-w-2xl">
+          <p className="font-serif text-xl text-bone/70 mt-8 max-w-2xl">
             Verified institutional partners only. Onboarding takes 9 minutes — Google OAuth + super-admin approval.
           </p>
-          <div className="mt-12 flex flex-wrap gap-3">
-            <Link to="/login" data-testid="footer-cta-primary" className="inline-flex items-center gap-3 bg-accent text-bone-100 px-8 py-5 text-base font-medium hover:bg-bone-100 hover:text-ink-900 transition-colors">
+          <div className="mt-12 flex flex-wrap gap-4">
+            <Link to="/login" data-testid="footer-cta-primary" className="inline-flex items-center gap-3 bg-accent text-bone px-8 py-5 text-base font-mono uppercase tracking-wider hover:bg-bone hover:text-ink transition-colors">
               Request access <ArrowUpRight size={18} />
             </Link>
-            <a href="mailto:hello@careeros.app" className="inline-flex items-center gap-3 border border-bone-100/30 px-8 py-5 text-base font-medium hover:border-accent hover:text-accent transition-colors">
+            <a href="mailto:hello@careeros.app" className="inline-flex items-center gap-3 border border-bone/35 px-8 py-5 text-base font-mono uppercase tracking-wider hover:border-accent hover:text-accent transition-colors">
               Talk to founders
             </a>
           </div>
@@ -396,8 +568,8 @@ export default function Landing() {
       <footer className="px-6 md:px-10 py-10 border-t border-line bg-bone-100">
         <div className="max-w-[1440px] mx-auto flex flex-col md:flex-row items-start md:items-center justify-between gap-5">
           <div className="flex items-center gap-3">
-            <div className="w-6 h-6 bg-ink-900 grid place-items-center"><div className="w-1.5 h-1.5 bg-accent" /></div>
-            <span className="font-mono text-[11px] tracking-[0.24em] text-ink-500">CAREEROS · SKILL TANK · {new Date().getFullYear()}</span>
+            <div className="w-6 h-6 bg-ink grid place-items-center"><div className="w-1.5 h-1.5 bg-accent" /></div>
+            <span className="font-mono text-[11px] tracking-[0.24em] text-ink-500">CAREEROS · PLATFORM LAYER · {new Date().getFullYear()}</span>
           </div>
           <div className="font-mono text-[11px] tracking-[0.24em] text-ink-400">DATA SEEDED FROM KMIT.IN/PLACEMENTS · 2017–2026</div>
         </div>

@@ -1056,6 +1056,13 @@ async def health():
     return {"status": "ok", "service": "careeros-v2"}
 
 
+@app.post("/api/test/reset-pending")
+async def test_reset_pending():
+    await db.users.update_one({"email": "tpo@vasavi.ac.in"}, {"$set": {"approved": False}})
+    await db.institutions.update_one({"institution_id": "inst_vasavi_pending"}, {"$set": {"approved": False}})
+    return {"ok": True}
+
+
 @app.get("/api/health/deep")
 async def deep_health():
     checks = {
@@ -1606,6 +1613,16 @@ async def my_dsa_questions(user=Depends(require_roles("student"))):
     _sid, student = await _resolve_student_for_user(user)
     if not student:
         raise HTTPException(404, "no student record bound")
+    return await _student_dsa_question_payload(student)
+
+
+@app.get("/api/dsa/student/{student_id}/questions")
+async def get_student_dsa_questions(student_id: str, user=Depends(require_roles("faculty", "tpo", "institution_admin", "super_admin"))):
+    student = await db.students.find_one({"student_id": student_id}, {"_id": 0})
+    if not student:
+        raise HTTPException(404, "student not found")
+    if user["role"] != "super_admin":
+        require_same_institution(student.get("institution_id", ""), user)
     return await _student_dsa_question_payload(student)
 
 

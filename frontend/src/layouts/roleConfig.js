@@ -128,6 +128,7 @@ export const roleConfig = {
         item("/recruiter/talent", "Talent pool", Target, "talent"),
         item("/recruiter/schedule", "Interview schedule", CalendarPlus, "schedule"),
         item("/recruiter/applications", "Pipeline", Send, "apps"),
+        item("/recruiter/analytics", "Hiring intelligence", BarChart3, "analytics"),
       ]},
     ],
   },

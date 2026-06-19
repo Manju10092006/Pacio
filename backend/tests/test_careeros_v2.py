@@ -115,6 +115,7 @@ def test_login_each_role(role, email, expected_role):
 
 
 def test_login_pending_account():
+    requests.post(f"{API}/test/reset-pending")
     s, r = _login(DEMO["pending"])
     assert r.status_code == 200
     assert r.json()["user"]["approved"] is False
@@ -580,6 +581,7 @@ def test_mou_tpo(tpo_session):
 
 # ---------- admin: approval flow ----------
 def test_admin_pending_and_approve(admin_session):
+    requests.post(f"{API}/test/reset-pending")
     pending = admin_session.get(f"{API}/admin/pending-signups")
     assert pending.status_code == 200
     items = pending.json()["items"]

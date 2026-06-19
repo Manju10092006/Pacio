@@ -39,6 +39,11 @@ import RecruiterHome from "./pages/RecruiterHome";
 import TalentPool from "./pages/TalentPool";
 import StudentHome from "./pages/StudentHome";
 import StudentDSA from "./pages/StudentDSA";
+import StudentAptitude from "./pages/StudentAptitude";
+import StudentATS from "./pages/StudentATS";
+import StudentInterviews from "./pages/StudentInterviews";
+import PlacementIntelligence from "./pages/PlacementIntelligence";
+import RecruiterAnalytics from "./pages/RecruiterAnalytics";
 
 const AuthCtx = createContext(null);
 export const useAuth = () => useContext(AuthCtx);
@@ -121,7 +126,7 @@ function AppRouter() {
         <Route path="institutions" element={<AdminPanel />} />
         <Route path="recruiters" element={<Recruiters />} />
         <Route path="analytics" element={<AnalyticsWorkbench />} />
-        <Route path="placements" element={<Outcomes />} />
+        <Route path="placements" element={<PlacementIntelligence />} />
         <Route path="announcements" element={<Announcements />} />
       </Route>
 
@@ -132,7 +137,7 @@ function AppRouter() {
         <Route path="departments" element={<Roster />} />
         <Route path="programs" element={<Cohorts />} />
         <Route path="analytics" element={<AnalyticsWorkbench />} />
-        <Route path="outcomes" element={<Outcomes />} />
+        <Route path="outcomes" element={<PlacementIntelligence />} />
         <Route path="dsa" element={<DSAIntelligence />} />
         <Route path="aptitude" element={<AptitudeIntelligence />} />
         <Route path="ats" element={<ATSIntelligence />} />
@@ -148,7 +153,7 @@ function AppRouter() {
         <Route index element={<Overview />} />
         <Route path="roster" element={<Roster />} />
         <Route path="cohorts" element={<Cohorts />} />
-        <Route path="outcomes" element={<Outcomes />} />
+        <Route path="outcomes" element={<PlacementIntelligence />} />
         <Route path="analytics" element={<AnalyticsWorkbench />} />
         <Route path="training" element={<Training />} />
         <Route path="dsa" element={<DSAIntelligence />} />
@@ -181,9 +186,9 @@ function AppRouter() {
       <Route path="/student" element={<Protected allow={["student"]}><RoleLayout {...roleConfig.student} /></Protected>}>
         <Route index element={<StudentHome />} />
         <Route path="dsa" element={<StudentDSA />} />
-        <Route path="aptitude" element={<AptitudeIntelligence />} />
-        <Route path="ats" element={<ATSIntelligence />} />
-        <Route path="interviews" element={<InterviewIntelligence />} />
+        <Route path="aptitude" element={<StudentAptitude />} />
+        <Route path="ats" element={<StudentATS />} />
+        <Route path="interviews" element={<StudentInterviews />} />
         <Route path="applications" element={<Applications />} />
         <Route path="jobs" element={<Jobs />} />
         <Route path="schedule" element={<InterviewSchedule />} />
@@ -197,6 +202,7 @@ function AppRouter() {
         <Route path="talent" element={<TalentPool />} />
         <Route path="schedule" element={<InterviewSchedule />} />
         <Route path="applications" element={<Applications />} />
+        <Route path="analytics" element={<RecruiterAnalytics />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

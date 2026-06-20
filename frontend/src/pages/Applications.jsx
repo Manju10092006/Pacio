@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { useAuth } from "../App";
 import { toast } from "sonner";
-import { Briefcase, Trash2, ArrowLeft, ArrowRight, Table, Kanban, Bookmark, ExternalLink, MapPin, Search, CheckCircle, X, ShieldAlert } from "lucide-react";
+import { Briefcase, Trash2, ArrowLeft, ArrowRight, ExternalLink, MapPin, X, ShieldAlert } from "lucide-react";
 
 const STAGES = ["Applied", "Shortlisted", "Assessment", "Interview", "Selected", "Rejected"];
 const STAGE_COLOR = { 
@@ -59,6 +59,7 @@ export default function Applications() {
     if (user?.role === "student") {
       loadSavedJobs();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   // Load candidate details when clicked
@@ -85,6 +86,7 @@ export default function Applications() {
       .finally(() => {
         setCandidateLoading(false);
       });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCandidateId]);
 
   const advance = async (id, next) => {

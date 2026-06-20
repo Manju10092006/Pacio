@@ -75,6 +75,7 @@ export default function Jobs() {
       loadSavedJobsIndex();
       searchDiscovery(keywords, location);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
 
   const handleCityChipClick = (cityVal) => {

@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { api } from "../lib/api";
 import { useAuth } from "../App";
 import { toast } from "sonner";
-import { FileText, ChevronDown, ChevronUp, Plus, Trash2, Download, Sparkles } from "lucide-react";
+import { FileText, ChevronDown, ChevronUp, Plus, Trash2, Sparkles } from "lucide-react";
 
 const TEMPLATES = [
   { id: "classic", name: "Classic", desc: "Traditional format, ATS-friendly." },
@@ -327,6 +327,17 @@ export default function StudentResume() {
         <button onClick={generate} disabled={generating} className="btn" data-testid="resume-generate-btn">
           <Sparkles size={14} /> {generating ? "Generating…" : "Generate Resume"}
         </button>
+        {downloadUrl && (
+          <a
+            href={downloadUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn btn-ghost text-xs py-2 px-3 border border-line-strong"
+            data-testid="resume-download-link"
+          >
+            Download PDF
+          </a>
+        )}
       </div>
     </div>
   );
@@ -590,7 +601,7 @@ function extractProfile(sections) {
       const isLarge = item.height > 10;
       if (isBold || isLarge) {
         name = item.text.trim();
-        if (/^[A-Za-z\s\.]+$/.test(name) && name.split(" ").length <= 4) {
+        if (/^[A-Za-z\s.]+$/.test(name) && name.split(" ").length <= 4) {
           break;
         }
       }
@@ -639,7 +650,7 @@ function extractWorkExperience(sections) {
         }
       } else if (text.startsWith("•") || text.startsWith("-")) {
         if (currentExp) {
-          currentExp.descriptions.push(text.replace(/^[•\-]\s*/, ""));
+          currentExp.descriptions.push(text.replace(/^[•-]\s*/, ""));
         }
       }
     }
@@ -696,7 +707,7 @@ function extractProjects(sections) {
         }
       } else if (text.startsWith("•") || text.startsWith("-")) {
         if (currentProj) {
-          currentProj.descriptions.push(text.replace(/^[•\-]\s*/, ""));
+          currentProj.descriptions.push(text.replace(/^[•-]\s*/, ""));
         }
       } else if (text.length > 3) {
         if (!currentProj) {

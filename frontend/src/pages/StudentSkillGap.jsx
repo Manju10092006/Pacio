@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { useAuth } from "../App";
-import { AlertTriangle, CheckCircle, Briefcase, Award, ArrowRight } from "lucide-react";
+import { AlertTriangle, CheckCircle, Briefcase, ArrowRight } from "lucide-react";
 
 const COMPONENT_LABELS = {
   dsa: "DSA",

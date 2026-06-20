@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { Progress, Select } from "../components/Primitives";
 import { PageTransition, CounterAnimation, DashboardReveal } from "../components/Motion";
-import { Bookmark, CheckCircle2, ChevronLeft, ChevronRight, Clock, Flag, Play, Send, Award, BookOpen, AlertCircle } from "lucide-react";
+import { Bookmark, CheckCircle2, ChevronLeft, ChevronRight, Clock, Flag, Play, Send, Award } from "lucide-react";
 import { toast } from "sonner";
 
 const fmt = (seconds) => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
@@ -181,6 +181,7 @@ export default function StudentAptitude() {
       if (aiTimerRef.current) clearInterval(aiTimerRef.current);
       aiTimerRef.current = null;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aiMode, aiResults]);
 
   const startAiTest = async () => {

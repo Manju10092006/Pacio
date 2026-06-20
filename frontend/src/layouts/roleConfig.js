@@ -6,7 +6,7 @@ export const roleConfig = {
   super_admin: {
     label: "Platform Control",
     role: "super_admin",
-    accent: "#0a0a0a",
+    accent: "#6657f5",
     sections: [
       { title: "Platform", items: [
         item("/platform", "Command", LayoutDashboard, "command"),
@@ -23,7 +23,7 @@ export const roleConfig = {
   institution_admin: {
     label: "Institution Console",
     role: "institution_admin",
-    accent: "#0a0a0a",
+    accent: "#6657f5",
     sections: [
       { title: "Institution", items: [
         item("/institution", "Overview", LayoutDashboard, "overview"),
@@ -48,7 +48,7 @@ export const roleConfig = {
   tpo: {
     label: "Placement Command",
     role: "tpo",
-    accent: "#ff3b00",
+    accent: "#f97316",
     sections: [
       { title: "Command", items: [
         item("/tpo", "Mission control", LayoutDashboard, "overview"),
@@ -81,7 +81,7 @@ export const roleConfig = {
   faculty: {
     label: "Faculty Console",
     role: "faculty",
-    accent: "#4a5d3a",
+    accent: "#10b981",
     sections: [
       { title: "Teaching", items: [
         item("/faculty", "My batches", LayoutDashboard, "overview"),
@@ -100,7 +100,7 @@ export const roleConfig = {
   student: {
     label: "Your Workspace",
     role: "student",
-    accent: "#c1440e",
+    accent: "#6657f5",
     sections: [
       { title: "Readiness", items: [
         item("/student", "Home", LayoutDashboard, "home"),
@@ -120,7 +120,7 @@ export const roleConfig = {
   recruiter: {
     label: "Recruiter Console",
     role: "recruiter",
-    accent: "#1a1a1a",
+    accent: "#27c4d8",
     sections: [
       { title: "Hiring", items: [
         item("/recruiter", "Overview", LayoutDashboard, "overview"),

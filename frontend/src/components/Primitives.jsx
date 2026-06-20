@@ -17,10 +17,10 @@ export const Button = React.forwardRef(({ className, variant = "default", ...pro
     <button
       ref={ref}
       className={cn(
-        "inline-flex items-center justify-center gap-2 px-5 py-3 text-xs font-mono tracking-wider uppercase border border-ink bg-ink text-bone hover:bg-accent hover:border-accent transition-all duration-200 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none",
-        variant === "ghost" && "bg-transparent text-ink border-line-strong hover:bg-ink hover:text-bone hover:border-ink",
-        variant === "accent" && "bg-accent border-accent text-bone hover:bg-ink hover:border-ink",
-        variant === "outline" && "bg-transparent border-line-strong text-ink hover:border-ink hover:bg-bone-200",
+        "inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3 text-xs font-semibold tracking-tight border border-accent bg-accent text-white shadow-sm shadow-[0_14px_28px_rgba(102,87,245,0.22)] hover:bg-accent-hover hover:border-accent-hover transition-all duration-200 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none",
+        variant === "ghost" && "bg-transparent text-ink border-line-strong shadow-none hover:bg-accent-soft hover:text-accent hover:border-accent/20",
+        variant === "accent" && "bg-accent border-accent text-white hover:bg-accent-hover hover:border-accent-hover",
+        variant === "outline" && "bg-white/80 border-line-strong text-ink shadow-none hover:border-accent/30 hover:bg-accent-soft/70 hover:text-accent",
         className
       )}
       {...props}
@@ -35,7 +35,7 @@ export const Input = React.forwardRef(({ className, ...props }, ref) => {
     <input
       ref={ref}
       className={cn(
-        "w-full bg-paper border border-line-strong px-4 py-3 text-sm font-sans placeholder-ink/40 focus:outline-none focus:border-ink focus:ring-1 focus:ring-ink transition-all",
+        "w-full rounded-2xl bg-white/86 border border-line-strong px-4 py-3 text-sm font-sans placeholder-ink/40 shadow-sm shadow-slate-200/40 focus:outline-none focus:border-accent/60 focus:ring-4 focus:ring-accent/10 transition-all",
         className
       )}
       {...props}
@@ -50,7 +50,7 @@ export const Textarea = React.forwardRef(({ className, ...props }, ref) => {
     <textarea
       ref={ref}
       className={cn(
-        "w-full bg-paper border border-line-strong px-4 py-3 text-sm font-sans placeholder-ink/40 focus:outline-none focus:border-ink focus:ring-1 focus:ring-ink transition-all min-h-[100px]",
+        "w-full rounded-2xl bg-white/86 border border-line-strong px-4 py-3 text-sm font-sans placeholder-ink/40 shadow-sm shadow-slate-200/40 focus:outline-none focus:border-accent/60 focus:ring-4 focus:ring-accent/10 transition-all min-h-[100px]",
         className
       )}
       {...props}
@@ -66,7 +66,7 @@ export const Select = React.forwardRef(({ className, children, ...props }, ref) 
       <select
         ref={ref}
         className={cn(
-          "w-full bg-paper border border-line-strong px-4 py-3 text-sm font-sans focus:outline-none focus:border-ink focus:ring-1 focus:ring-ink transition-all appearance-none pr-10 cursor-pointer",
+          "w-full rounded-2xl bg-white/86 border border-line-strong px-4 py-3 text-sm font-sans shadow-sm shadow-slate-200/40 focus:outline-none focus:border-accent/60 focus:ring-4 focus:ring-accent/10 transition-all appearance-none pr-10 cursor-pointer",
           className
         )}
         {...props}
@@ -88,9 +88,9 @@ export function Badge({ className, variant = "default", children, ...props }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-mono tracking-wider uppercase border border-line-strong bg-bone-200 text-ink",
-        variant === "solid" && "bg-ink text-bone border-ink",
-        variant === "accent" && "bg-accent text-bone border-accent",
+        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold tracking-tight border border-line-strong bg-white/80 text-ink",
+        variant === "solid" && "bg-accent text-white border-accent",
+        variant === "accent" && "bg-accent-soft text-accent border-accent/20",
         variant === "success" && "bg-moss/10 text-moss border-moss/30",
         variant === "warning" && "bg-ochre/10 text-ochre border-ochre/30",
         variant === "danger" && "bg-rust/10 text-rust border-rust/30",
@@ -109,7 +109,7 @@ export function Avatar({ className, name = "U", src, ...props }) {
   return (
     <div
       className={cn(
-        "relative flex h-9 w-9 shrink-0 overflow-hidden border border-line-strong bg-bone-200 font-mono text-xs font-semibold items-center justify-center text-ink select-none",
+        "relative flex h-9 w-9 shrink-0 overflow-hidden rounded-2xl border border-line-strong bg-accent-soft font-mono text-xs font-semibold items-center justify-center text-accent select-none",
         className
       )}
       {...props}
@@ -127,12 +127,12 @@ export function Avatar({ className, name = "U", src, ...props }) {
 export function Progress({ className, value = 0, ...props }) {
   return (
     <ProgressPrimitive.Root
-      className={cn("relative h-2 w-full overflow-hidden bg-bone-200 border border-line", className)}
+      className={cn("relative h-2.5 w-full overflow-hidden rounded-full bg-bone-200 border border-line", className)}
       value={value}
       {...props}
     >
       <ProgressPrimitive.Indicator
-        className="h-full w-full flex-1 bg-accent transition-all duration-300"
+        className="h-full w-full flex-1 bg-gradient-to-r from-accent to-cyan transition-all duration-300"
         style={{ transform: `translateX(-${100 - (value || 0)}%)` }}
       />
     </ProgressPrimitive.Root>
@@ -150,11 +150,11 @@ export function TooltipComponent({ content, children }) {
       <Tooltip.Trigger asChild>{children}</Tooltip.Trigger>
       <Tooltip.Portal>
         <Tooltip.Content
-          className="z-50 overflow-hidden bg-ink text-bone px-3 py-1.5 text-xs font-mono border border-ink shadow-md"
+          className="z-50 overflow-hidden rounded-xl bg-violet text-white px-3 py-1.5 text-xs font-medium shadow-lg shadow-[0_14px_28px_rgba(102,87,245,0.22)]"
           sideOffset={5}
         >
           {content}
-          <Tooltip.Arrow className="fill-ink" />
+          <Tooltip.Arrow className="fill-violet" />
         </Tooltip.Content>
       </Tooltip.Portal>
     </Tooltip.Root>
@@ -169,10 +169,10 @@ export function DialogRoot({ children, open, onOpenChange }) {
 export function DialogContent({ children, title, className, ...props }) {
   return (
     <Dialog.Portal>
-      <Dialog.Overlay className="fixed inset-0 z-50 bg-ink/40 backdrop-blur-sm" />
+      <Dialog.Overlay className="fixed inset-0 z-50 bg-violet/30 backdrop-blur-sm" />
       <Dialog.Content
         className={cn(
-          "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] border border-line-strong bg-bone p-8 shadow-lg",
+          "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] rounded-3xl border border-line-strong bg-white p-8 shadow-2xl shadow-[0_24px_70px_rgba(102,87,245,0.18)]",
           className
         )}
         {...props}
@@ -197,10 +197,10 @@ export function SheetRoot({ children, open, onOpenChange }) {
 export function SheetContent({ children, title, className, ...props }) {
   return (
     <Dialog.Portal>
-      <Dialog.Overlay className="fixed inset-0 z-50 bg-ink/40 backdrop-blur-sm" />
+      <Dialog.Overlay className="fixed inset-0 z-50 bg-violet/30 backdrop-blur-sm" />
       <Dialog.Content
         className={cn(
-          "fixed inset-y-0 right-0 z-50 h-full w-full max-w-md border-l border-line-strong bg-bone p-8 shadow-lg",
+          "fixed inset-y-0 right-0 z-50 h-full w-full max-w-md rounded-l-3xl border-l border-line-strong bg-white p-8 shadow-2xl shadow-[0_24px_70px_rgba(102,87,245,0.18)]",
           className
         )}
         {...props}
@@ -227,10 +227,10 @@ export function DrawerRoot({ children, open, onOpenChange }) {
 export function DrawerContent({ children, title, className, ...props }) {
   return (
     <Dialog.Portal>
-      <Dialog.Overlay className="fixed inset-0 z-50 bg-ink/40 backdrop-blur-sm" />
+      <Dialog.Overlay className="fixed inset-0 z-50 bg-violet/30 backdrop-blur-sm" />
       <Dialog.Content
         className={cn(
-          "fixed inset-x-0 bottom-0 z-50 max-h-[90vh] border-t border-line-strong bg-bone p-8 shadow-lg",
+          "fixed inset-x-0 bottom-0 z-50 max-h-[90vh] rounded-t-3xl border-t border-line-strong bg-white p-8 shadow-2xl shadow-[0_24px_70px_rgba(102,87,245,0.18)]",
           className
         )}
         {...props}
@@ -262,8 +262,8 @@ export function CommandPalette({ open, onOpenChange, items = [], onSelect }) {
   return (
     <DialogRoot open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-ink/40 backdrop-blur-sm" />
-        <Dialog.Content className="fixed left-[50%] top-[40%] z-50 w-full max-w-xl translate-x-[-50%] translate-y-[-50%] border border-line-strong bg-bone shadow-2xl overflow-hidden">
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-violet/30 backdrop-blur-sm" />
+        <Dialog.Content className="fixed left-[50%] top-[40%] z-50 w-full max-w-xl translate-x-[-50%] translate-y-[-50%] rounded-3xl border border-line-strong bg-white shadow-2xl shadow-[0_24px_70px_rgba(102,87,245,0.18)] overflow-hidden">
           <div className="flex items-center border-b border-line px-4 py-3 gap-3">
             <Search size={18} className="text-ink/50" />
             <input
@@ -283,7 +283,7 @@ export function CommandPalette({ open, onOpenChange, items = [], onSelect }) {
               filtered.map((item, i) => (
                 <button
                   key={i}
-                  className="w-full text-left px-3 py-2 hover:bg-ink hover:text-bone text-sm flex items-center justify-between font-mono transition-colors"
+                  className="w-full rounded-2xl text-left px-3 py-2 hover:bg-accent-soft hover:text-accent text-sm flex items-center justify-between font-mono transition-colors"
                   onClick={() => {
                     onSelect(item);
                     onOpenChange(false);

@@ -1132,6 +1132,20 @@ async def _startup():
             "created_at": datetime.now(timezone.utc).isoformat(),
         })
 
+    # Backfill college health scores so dashboards + the AI risk radar have data on first load.
+    # Idempotent (only computes when missing) and fully guarded so it can never break startup.
+    try:
+        _insts_for_health = await db.institutions.find({}, {"_id": 0, "institution_id": 1, "health_score": 1}).to_list(500)
+        for _inst in _insts_for_health:
+            _iid = _inst.get("institution_id")
+            if _iid and _inst.get("health_score") is None:
+                try:
+                    await _compute_institution_health(_iid)
+                except Exception as _e:  # noqa: BLE001
+                    log.warning("Health backfill skipped for %s: %s", _iid, _e)
+    except Exception as _e:  # noqa: BLE001
+        log.warning("Health backfill skipped: %s", _e)
+
 
 # ============== HEALTH ==============
 @app.get("/api/health")

@@ -4,6 +4,9 @@ import { api } from "../lib/api";
 import { useAuth } from "../App";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 import { AlertTriangle, ArrowUpRight, CheckCircle2 } from "lucide-react";
+import VoiceSummary from "../components/VoiceSummary";
+import HealthBreakdown from "../components/HealthBreakdown";
+import HighRiskStudents from "../components/HighRiskStudents";
 
 const num = (value, decimals = 0) => {
   if (value === null || value === undefined || value === "") return "0";
@@ -85,6 +88,31 @@ export default function Overview() {
       lowerSub: `${placed} of ${total} placed`,
     };
 
+  const readinessAvg = data?.readiness?.avg_readiness ?? overview?.readiness?.avg_readiness;
+  const needsInt = data?.readiness?.needs_intervention ?? overview?.readiness?.needs_intervention ?? 0;
+  const liveAlerts = workspace?.alerts || [];
+  const topAlert = liveAlerts[0];
+  const scopeWord = workspace?.role === "faculty" ? "department" : "placement";
+  const execNarration = [
+    `This is your live ${scopeWord} summary.`,
+    total ? `Placement rate is ${rate} percent, with ${placed} of ${total} students placed.` : null,
+    latest?.offers
+      ? `This cycle delivered ${num(latest.offers)} offers across ${latest.companies || 0} recruiters, averaging ${num(latest.avg_lpa, 1)} LPA${latest.top_offer_lpa ? `, peaking at ${num(latest.top_offer_lpa, 1)} LPA` : ""}${latest.top_company ? ` from ${latest.top_company}` : ""}.`
+      : null,
+    (readinessAvg !== undefined && readinessAvg !== null)
+      ? `Average readiness is ${num(readinessAvg)} out of 100${needsInt ? `, with ${needsInt} student${needsInt === 1 ? "" : "s"} needing intervention` : ""}.`
+      : null,
+    liveAlerts.length
+      ? `${liveAlerts.length} live alert${liveAlerts.length === 1 ? "" : "s"} need attention${topAlert?.title ? `, led by ${topAlert.title}` : ""}.`
+      : "No urgent alerts across the pipeline.",
+    needsInt
+      ? `Recommended focus: run a readiness booster for the ${needsInt} flagged student${needsInt === 1 ? "" : "s"}, then sustain recruiter momentum.`
+      : "Recommended focus: sustain recruiter momentum and convert open roles.",
+  ].filter(Boolean).join(" ");
+
+  const institutionId = workspace?.scope?.institution_id || user?.institution_id;
+  const rosterPath = { tpo: "/tpo/roster", faculty: "/faculty/roster" }[workspace?.role];
+
   return (
     <div className="space-y-10">
       <div className="grid grid-cols-12 gap-3">
@@ -119,6 +147,15 @@ export default function Overview() {
             <div className="text-bone-100/60 text-sm">{sideMetric.lowerSub}</div>
           </div>
         </div>
+      </div>
+
+      {/* AI EXECUTIVE SUMMARY — live narrative + voice narration (ported from CareerOS) */}
+      <div className="editorial p-8 lg:p-10 bg-bone-50" data-testid="ai-exec-summary">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div className="font-mono text-[10px] tracking-[0.28em] text-ink-400">AI EXECUTIVE SUMMARY / LIVE</div>
+          <VoiceSummary text={execNarration} label="Narrate summary" />
+        </div>
+        <p className="font-serif text-xl text-ink-600 mt-4 leading-relaxed max-w-4xl">{execNarration}</p>
       </div>
 
       <div className="grid grid-cols-12 gap-3" data-testid="kpi-grid">
@@ -177,6 +214,18 @@ export default function Overview() {
               ))}
               {(workspace.alerts || []).length === 0 && <div className="text-sm text-ink-400">No urgent alerts in this workspace.</div>}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* COLLEGE HEALTH 6-FACTOR + AI HIGH-RISK STUDENTS (ported from CareerOS intelligence layer) */}
+      {institutionId && (
+        <div className="grid grid-cols-12 gap-3" data-testid="health-risk-row">
+          <div className="col-span-12 md:col-span-7">
+            <HealthBreakdown institutionId={institutionId} showVoice />
+          </div>
+          <div className="col-span-12 md:col-span-5">
+            <HighRiskStudents rosterPath={rosterPath} />
           </div>
         </div>
       )}

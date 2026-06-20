@@ -25,6 +25,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import PlatformSummary from "../components/PlatformSummary";
 
 const fmt = (value) => {
   if (value === null || value === undefined || value === "-") return "-";
@@ -104,6 +105,9 @@ export default function PlatformControl() {
           Open analytics
         </Link>
       </div>
+
+      {/* AI EXECUTIVE SUMMARY + VOICE + RISK RADAR (ported from CareerOS intelligence layer) */}
+      <PlatformSummary stats={stats} insts={insts} />
 
       <section className="grid grid-cols-12 gap-3" data-testid="platform-kpis">
         {overviewStats.map((k) => (

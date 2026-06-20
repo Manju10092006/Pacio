@@ -29,15 +29,15 @@ export function Kanban({
   }, [items, columns]);
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 overflow-x-auto pb-4">
+    <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-3 overflow-x-auto pb-4">
       {columns.map(col => {
         const colItems = groupedItems[col] || [];
         return (
-          <div key={col} className="rounded-3xl bg-white/72 border border-line p-3 min-w-[210px] flex flex-col min-h-[480px] shadow-sm backdrop-blur-md">
+          <div key={col} className="bg-bone-100/60 border border-line-strong p-3 min-w-[200px] flex flex-col min-h-[480px]">
             {/* Column Header */}
-            <div className="flex items-center justify-between border-b border-line pb-3 mb-3">
+            <div className="flex items-center justify-between border-b border-line-strong pb-2 mb-3">
               <span className="font-mono text-xs font-bold tracking-widest uppercase text-ink/75">{col}</span>
-              <span className="font-mono text-[10px] rounded-full bg-accent-soft text-accent border border-accent/10 px-2 py-0.5">{colItems.length}</span>
+              <span className="font-mono text-[10px] bg-bone-300 border border-line-strong px-2 py-0.5">{colItems.length}</span>
             </div>
 
             {/* Column Cards */}
@@ -46,7 +46,7 @@ export function Kanban({
                 <div
                   key={item._id || item.id}
                   onClick={() => onItemClick && onItemClick(item)}
-                  className="rounded-3xl border border-line bg-white p-4 hover:border-accent/35 hover:shadow-lg hover:shadow-[0_18px_35px_rgba(102,87,245,0.12)] cursor-pointer transition-all group relative"
+                  className="editorial p-4 hover:border-ink hover:shadow-sm cursor-pointer transition-all bg-paper group relative"
                 >
                   <div className="space-y-2">
                     <div className="flex items-baseline justify-between gap-1">
@@ -83,7 +83,7 @@ export function Kanban({
                               e.stopPropagation();
                               onStageChange(item, nextCol);
                             }}
-                            className="rounded-lg p-1 hover:bg-accent-soft border border-line hover:border-accent/25 text-[8px] font-mono uppercase tracking-wider flex items-center gap-0.5"
+                            className="p-1 hover:bg-bone-200 border border-line-strong hover:border-ink text-[8px] font-mono uppercase tracking-wider flex items-center gap-0.5"
                           >
                             {nextCol.slice(0, 3)} <ArrowRight size={8} />
                           </button>
@@ -94,7 +94,7 @@ export function Kanban({
               ))}
 
               {colItems.length === 0 && (
-                <div className="rounded-3xl text-[10px] font-mono text-ink/30 text-center py-12 border border-dashed border-line">
+                <div className="text-[10px] font-mono text-ink/30 text-center py-12 border border-dashed border-line">
                   DRAG OR UPDATE ITEMS HERE
                 </div>
               )}

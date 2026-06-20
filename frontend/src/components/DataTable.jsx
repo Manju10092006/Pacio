@@ -103,7 +103,7 @@ export function DataTable({
   return (
     <div className="space-y-4">
       {/* Table Actions Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-line bg-white/82 p-4 shadow-sm backdrop-blur-md">
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-bone-100 p-4 border border-line-strong">
         <div className="flex items-center gap-3 flex-1 min-w-[240px]">
           {searchKey && (
             <Input
@@ -140,7 +140,7 @@ export function DataTable({
         <div className="flex items-center gap-2">
           {/* Bulk Actions */}
           {selectedIds.size > 0 && bulkActions.length > 0 && (
-            <div className="flex items-center gap-2 rounded-2xl bg-accent/10 border border-accent/20 px-3 py-1.5 text-xs font-mono">
+            <div className="flex items-center gap-2 bg-accent/10 border border-accent/20 px-3 py-1.5 text-xs font-mono">
               <span className="text-accent">{selectedIds.size} SELECTED</span>
               {bulkActions.map(action => (
                 <Button
@@ -165,7 +165,7 @@ export function DataTable({
               <EyeOff size={14} className="mr-1" /> Columns
             </Button>
             {showColMenu && (
-              <div className="absolute right-0 mt-2 w-48 rounded-2xl border border-line-strong bg-white p-3 shadow-xl z-20 space-y-2 font-mono text-[10px]">
+              <div className="absolute right-0 mt-2 w-48 border border-line-strong bg-bone p-3 shadow-xl z-20 space-y-2 font-mono text-[10px]">
                 <div className="font-semibold text-ink/40 tracking-wider pb-1.5 border-b border-line">SHOW/HIDE</div>
                 {columns.map(col => {
                   const isVisible = visibleColumns.has(col.key);
@@ -196,10 +196,10 @@ export function DataTable({
       </div>
 
       {/* Main Table */}
-      <div className="rounded-3xl border border-line bg-white/92 overflow-x-auto shadow-sm">
-        <table className="w-full text-left">
+      <div className="border border-line-strong bg-paper overflow-x-auto">
+        <table className="w-full text-left border-collapse">
           <thead>
-            <tr className="border-b border-line bg-accent-soft/45 font-mono text-[10px] text-ink/65 tracking-wider uppercase select-none">
+            <tr className="border-b border-line-strong bg-bone-100/55 font-mono text-[10px] text-ink/65 tracking-wider uppercase select-none">
               {bulkActions.length > 0 && (
                 <th className="p-4 w-12 text-center border-r border-line">
                   <button onClick={toggleSelectAll} className="hover:text-accent">
@@ -215,7 +215,7 @@ export function DataTable({
                     onClick={() => handleSort(col.key, col.sortable)}
                     className={cn(
                       "p-4 font-semibold border-r border-line last:border-r-0",
-                      col.sortable && "cursor-pointer hover:bg-white/70 hover:text-accent"
+                      col.sortable && "cursor-pointer hover:bg-bone-200 hover:text-ink"
                     )}
                   >
                     <div className="flex items-center gap-1">
@@ -245,7 +245,7 @@ export function DataTable({
                     key={rowId}
                     onClick={() => onRowClick && onRowClick(row)}
                     className={cn(
-                      "hover:bg-accent-soft/35 transition-colors border-b border-line last:border-b-0",
+                      "hover:bg-bone-50 transition-colors border-b border-line last:border-b-0",
                       isSelected && "bg-accent/[0.03]",
                       onRowClick && "cursor-pointer"
                     )}
@@ -273,12 +273,12 @@ export function DataTable({
                           <button className="p-1.5 hover:bg-bone-200 rounded border border-transparent hover:border-line-strong transition-all">
                             <MoreHorizontal size={14} />
                           </button>
-                          <div className="hidden group-hover:block absolute right-0 bottom-full mb-1 w-36 rounded-2xl bg-white text-ink border border-line-strong shadow-xl shadow-[0_18px_35px_rgba(102,87,245,0.14)] z-20 p-1.5 font-mono text-[10px]">
+                          <div className="hidden group-hover:block absolute right-0 bottom-full mb-1 w-32 bg-ink text-bone border border-ink shadow-lg z-20 py-1 font-mono text-[10px]">
                             {rowActions.map(act => (
                               <button
                                 key={act.label}
                                 onClick={() => act.action(row)}
-                                className="w-full rounded-xl text-left px-3 py-1.5 hover:bg-accent-soft hover:text-accent uppercase tracking-wider transition-colors"
+                                className="w-full text-left px-3 py-1.5 hover:bg-accent text-bone uppercase tracking-wider"
                               >
                                 {act.label}
                               </button>
@@ -296,7 +296,7 @@ export function DataTable({
       </div>
 
       {/* Pagination Bar */}
-      <div className="flex items-center justify-between font-mono text-xs text-ink/60 p-4 rounded-3xl border border-line bg-white/82 shadow-sm">
+      <div className="flex items-center justify-between font-mono text-xs text-ink/60 p-4 border border-line-strong bg-bone-100">
         <div>
           SHOWING {Math.min(processedData.length, (currentPage - 1) * pageSize + 1)}-
           {Math.min(processedData.length, currentPage * pageSize)} OF {processedData.length} ROWS

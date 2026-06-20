@@ -2095,6 +2095,91 @@ async def my_readiness(user=Depends(require_roles("student"))):
     return {"student": student, "readiness": readiness}
 
 
+@app.get("/api/me/readiness")
+async def my_readiness_compat(user=Depends(require_roles("student"))):
+    payload = await my_readiness(user)
+    return {"student": payload["student"], **payload["readiness"]}
+
+
+@app.get("/api/me/ai-analysis")
+async def my_ai_analysis(user=Depends(require_roles("student"))):
+    sid = user.get("student_id")
+    if not sid:
+        raise HTTPException(404, "no student record bound")
+    student = await db.students.find_one({"student_id": sid}, {"_id": 0})
+    if not student:
+        raise HTTPException(404, "student not found")
+
+    readiness = await build_student_readiness(db, student)
+    dsa_payload = await _student_dsa_question_payload(student)
+    dsa_topics = dsa_payload.get("topics", [])
+    weak_dsa = sorted(dsa_topics, key=lambda row: row.get("solved", 0) / max(1, row.get("total", 1)))[:5]
+
+    latest_ats = await db.ats_reports.find_one({"student_id": sid}, {"_id": 0}, sort=[("created_at", -1)])
+    latest_resume = await db.resume_versions.find_one({"student_id": sid}, {"_id": 0}, sort=[("upload_date", -1)])
+    aptitude_attempts = await db.aptitude_test_attempts.find({"student_id": sid}, {"_id": 0}).sort("submitted_at", -1).limit(10).to_list(10)
+    aptitude_progress = await db.aptitude_progress.find({"student_id": sid}, {"_id": 0}).to_list(500)
+    interviews = await db.interview_reports.find({"student_id": sid}, {"_id": 0}).sort("conducted_at", -1).limit(10).to_list(10)
+    submissions = await db.dsa_code_submissions.find({"student_id": sid}, {"_id": 0}).sort("created_at", -1).limit(10).to_list(10)
+    applications = await db.applications.find({"student_id": sid}, {"_id": 0}).sort("created_at", -1).limit(20).to_list(20)
+
+    aptitude_accuracy = round(
+        sum(float(row.get("accuracy", 0) or row.get("score", 0) or 0) for row in aptitude_progress) / max(1, len(aptitude_progress)),
+        1,
+    )
+    interview_avg = round(
+        sum(float(row.get("overall_score", 0) or 0) for row in interviews) / max(1, len(interviews)),
+        1,
+    ) if interviews else 0
+    ats_score = float((latest_resume or {}).get("ats_score") or (latest_ats or {}).get("ats_score") or (latest_ats or {}).get("score") or 0)
+    component_rows = [
+        {"key": key, "label": key.replace("_", " ").title(), **value}
+        for key, value in readiness.get("components", {}).items()
+    ]
+    weakest_components = sorted(component_rows, key=lambda row: float(row.get("score", 0)))[:3]
+    actions = []
+    for row in weakest_components:
+        key = row["key"]
+        if key == "dsa":
+            actions.append("Solve two medium A2Z problems daily from your weakest DSA topics.")
+        elif key == "aptitude":
+            actions.append("Take one timed aptitude sectional test and review every wrong answer.")
+        elif key == "ats":
+            actions.append("Upload a revised resume and close the highest-impact missing keywords.")
+        elif key == "interview":
+            actions.append("Complete one mock interview and record STAR-format responses.")
+        elif key == "consistency":
+            actions.append("Build a 7-day streak across DSA, aptitude, and interview practice.")
+        else:
+            actions.append(f"Improve {row['label']} to lift placement readiness.")
+    if not actions:
+        actions = ["Maintain daily practice streaks and apply to matching drives."]
+
+    prediction = await _student_prediction_payload(sid)
+    return {
+        "student": student,
+        "readiness": readiness,
+        "prediction": prediction.get("prediction"),
+        "signals": {
+            "dsa_solved": dsa_payload.get("solved", 0),
+            "dsa_total": dsa_payload.get("total", DSA_TOTAL),
+            "aptitude_accuracy": aptitude_accuracy,
+            "aptitude_attempts": len(aptitude_attempts),
+            "ats_score": ats_score,
+            "interview_average": interview_avg,
+            "interview_count": len(interviews),
+            "applications": len(applications),
+            "code_submissions": len(submissions),
+        },
+        "weak_dsa_topics": weak_dsa,
+        "latest_ats": latest_ats or latest_resume,
+        "latest_interviews": interviews[:5],
+        "recent_submissions": submissions[:5],
+        "actions": actions[:5],
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
 @app.get("/api/readiness/students")
 async def readiness_students(
     department: Optional[str] = None,
@@ -5910,6 +5995,223 @@ async def delete_comm_log(log_id: str, request: Request, user=Depends(get_sessio
     return {"ok": True}
 
 
+# ============== WORKSHOPS, BENCHMARKING, PARTNER CHAT ==============
+class WorkshopBody(BaseModel):
+    title: str
+    type: Literal["workshop", "hackathon", "bootcamp", "webinar"] = "workshop"
+    preferred_date: Optional[str] = None
+    attendees: int = 60
+    notes: Optional[str] = None
+    institution_id: Optional[str] = None
+
+
+class WorkshopStatusBody(BaseModel):
+    status: Literal["requested", "reviewing", "approved", "declined", "scheduled"]
+    scheduled_date: Optional[str] = None
+    admin_notes: Optional[str] = None
+
+
+class ChatMessageBody(BaseModel):
+    content: str
+    institution_id: Optional[str] = None
+
+
+def _partner_scope(user: dict, explicit_institution_id: Optional[str] = None) -> str:
+    if user.get("role") == "super_admin":
+        return explicit_institution_id or user.get("institution_id") or "inst_kmit"
+    iid = user.get("institution_id")
+    if explicit_institution_id and explicit_institution_id != iid:
+        raise HTTPException(403, "Cross-institution access denied")
+    if not iid:
+        raise HTTPException(400, "institution_id required")
+    return iid
+
+
+async def _workshop_counts(institution_id: Optional[str] = None) -> dict:
+    query = {"institution_id": institution_id} if institution_id else {}
+    rows = await db.workshop_requests.find(query, {"_id": 0}).to_list(500)
+    return {
+        "total": len(rows),
+        "requested": sum(1 for r in rows if r.get("status") == "requested"),
+        "reviewing": sum(1 for r in rows if r.get("status") == "reviewing"),
+        "approved": sum(1 for r in rows if r.get("status") == "approved"),
+        "scheduled": sum(1 for r in rows if r.get("status") == "scheduled"),
+        "declined": sum(1 for r in rows if r.get("status") == "declined"),
+    }
+
+
+@app.get("/api/workshops")
+async def list_workshops(user=Depends(require_roles("super_admin", "institution_admin", "tpo", "faculty"))):
+    query = {}
+    if user["role"] != "super_admin":
+        query["institution_id"] = user.get("institution_id")
+    items = await db.workshop_requests.find(query, {"_id": 0}).sort("created_at", -1).limit(200).to_list(200)
+    summary = await _workshop_counts(None if user["role"] == "super_admin" else user.get("institution_id"))
+    return {"items": items, "summary": summary}
+
+
+@app.post("/api/workshops")
+async def create_workshop(payload: WorkshopBody, request: Request, user=Depends(require_roles("super_admin", "institution_admin", "tpo", "faculty"))):
+    iid = _partner_scope(user, payload.institution_id)
+    now = datetime.now(timezone.utc).isoformat()
+    doc = {
+        "workshop_id": f"workshop_{uuid.uuid4().hex[:10]}",
+        "institution_id": iid,
+        "title": payload.title,
+        "type": payload.type,
+        "preferred_date": payload.preferred_date,
+        "attendees": int(payload.attendees or 0),
+        "notes": payload.notes or "",
+        "status": "requested",
+        "requested_by": user.get("user_id"),
+        "requested_by_name": user.get("name") or user.get("email"),
+        "created_at": now,
+        "updated_at": now,
+    }
+    await db.workshop_requests.insert_one(doc)
+    await _create_system_notification(
+        institution_id=iid,
+        type_="workshop.requested",
+        title="Workshop request submitted",
+        body=f"{doc['title']} is waiting for platform review.",
+        channels=["in_app"],
+    )
+    await _audit_log("workshop.requested", user=user, institution_id=iid, resource="workshop", resource_id=doc["workshop_id"], request=request)
+    await ws_manager.broadcast(iid, {"type": "workshop.requested", "item": {k: v for k, v in doc.items() if k != "_id"}})
+    doc.pop("_id", None)
+    return {"success": True, "item": doc}
+
+
+@app.patch("/api/workshops/{workshop_id}/status")
+async def update_workshop_status(workshop_id: str, payload: WorkshopStatusBody, request: Request, user=Depends(require_roles("super_admin", "institution_admin", "tpo"))):
+    existing = await db.workshop_requests.find_one({"workshop_id": workshop_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(404, "workshop not found")
+    if user["role"] != "super_admin" and existing.get("institution_id") != user.get("institution_id"):
+        raise HTTPException(403, "forbidden")
+    update = {
+        "status": payload.status,
+        "admin_notes": payload.admin_notes,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    if payload.scheduled_date:
+        update["scheduled_date"] = payload.scheduled_date
+    await db.workshop_requests.update_one({"workshop_id": workshop_id}, {"$set": update})
+    item = await db.workshop_requests.find_one({"workshop_id": workshop_id}, {"_id": 0})
+    await _create_system_notification(
+        institution_id=item.get("institution_id"),
+        type_="workshop.updated",
+        title=f"Workshop {payload.status}",
+        body=f"{item.get('title')} moved to {payload.status}.",
+        channels=["in_app"],
+    )
+    await _audit_log("workshop.status_updated", user=user, institution_id=item.get("institution_id"), resource="workshop", resource_id=workshop_id, metadata={"status": payload.status}, request=request)
+    await ws_manager.broadcast(item.get("institution_id"), {"type": "workshop.updated", "item": item})
+    return {"success": True, "item": item}
+
+
+async def _institution_benchmark_row(inst: dict) -> dict:
+    iid = inst.get("institution_id")
+    students = await db.students.find({"institution_id": iid}, {"_id": 0}).to_list(5000)
+    student_count = len(students)
+    placed = sum(1 for s in students if s.get("placement", {}).get("placed"))
+    readiness_values = [float(s.get("readiness_score", 0) or s.get("readiness", 0) or 0) for s in students]
+    placement_rate = round((placed / student_count) * 100, 1) if student_count else 0
+    avg_readiness = round(sum(readiness_values) / len(readiness_values), 1) if readiness_values else 0
+    cohorts = await db.training_programs.find({"institution_id": iid}, {"_id": 0}).to_list(500)
+    completion = round(sum(float(c.get("completion_pct", 0) or 0) for c in cohorts) / len(cohorts), 1) if cohorts else 0
+    mou = await db.mous.find_one({"institution_id": iid}, {"_id": 0}) or {}
+    seats_purchased = int(mou.get("seats_purchased", student_count) or student_count or 0)
+    seats_used = int(mou.get("seats_used", min(student_count, seats_purchased)) or 0)
+    health = float(inst.get("health_score", 0) or 0)
+    if not health:
+        health = round((placement_rate * 0.35) + (avg_readiness * 0.35) + (completion * 0.2) + (min(100, (seats_used / max(1, seats_purchased)) * 100) * 0.1), 1)
+    return {
+        "institution_id": iid,
+        "name": inst.get("name"),
+        "short_name": inst.get("short_name") or inst.get("name"),
+        "student_count": student_count,
+        "placement_rate": placement_rate,
+        "avg_readiness": avg_readiness,
+        "training_completion": completion,
+        "health_score": health,
+        "seats_purchased": seats_purchased,
+        "seats_used": seats_used,
+    }
+
+
+@app.get("/api/benchmarking/partner")
+async def partner_benchmarking(user=Depends(require_roles("super_admin", "institution_admin", "tpo", "faculty"))):
+    iid = _partner_scope(user, None)
+    institutions = await db.institutions.find({}, {"_id": 0}).to_list(500)
+    rows = [await _institution_benchmark_row(inst) for inst in institutions if inst.get("institution_id")]
+    rows = [r for r in rows if r["student_count"] or r["institution_id"] == iid]
+    if not rows:
+        return {"self": None, "averages": {}, "top_band": {}, "leaderboard": []}
+    metrics = ["placement_rate", "avg_readiness", "training_completion", "health_score"]
+    averages = {m: round(sum(float(r.get(m, 0)) for r in rows) / len(rows), 1) for m in metrics}
+    sorted_by_health = sorted(rows, key=lambda r: r.get("health_score", 0), reverse=True)
+    top_n = max(1, round(len(sorted_by_health) * 0.1))
+    top_rows = sorted_by_health[:top_n]
+    top_band = {m: round(sum(float(r.get(m, 0)) for r in top_rows) / len(top_rows), 1) for m in metrics}
+    self_row = next((r for r in rows if r["institution_id"] == iid), rows[0])
+    rank = next((idx + 1 for idx, r in enumerate(sorted_by_health) if r["institution_id"] == self_row["institution_id"]), len(rows))
+    percentile = round(((len(rows) - rank + 1) / len(rows)) * 100)
+    return {
+        "self": {**self_row, "rank": rank, "percentile": percentile},
+        "averages": averages,
+        "top_band": top_band,
+        "leaderboard": sorted_by_health[:12],
+        "insight": f"{self_row['short_name']} is rank {rank} of {len(rows)} with a {self_row['health_score']} health score.",
+    }
+
+
+@app.get("/api/chat/room")
+async def get_chat_room(institution_id: Optional[str] = None, user=Depends(require_roles("super_admin", "institution_admin", "tpo", "faculty"))):
+    iid = _partner_scope(user, institution_id)
+    room = await db.chat_rooms.find_one({"institution_id": iid}, {"_id": 0})
+    if not room:
+        room = {
+            "room_id": f"room_{uuid.uuid5(uuid.NAMESPACE_DNS, iid).hex[:12]}",
+            "institution_id": iid,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        await db.chat_rooms.insert_one(room)
+        room.pop("_id", None)
+    return {"room": room}
+
+
+@app.get("/api/chat/messages")
+async def list_chat_messages(institution_id: Optional[str] = None, user=Depends(require_roles("super_admin", "institution_admin", "tpo", "faculty"))):
+    iid = _partner_scope(user, institution_id)
+    room = (await get_chat_room(iid, user))["room"]
+    items = await db.chat_messages.find({"room_id": room["room_id"]}, {"_id": 0}).sort("created_at", 1).limit(200).to_list(200)
+    return {"room": room, "items": items}
+
+
+@app.post("/api/chat/messages")
+async def create_chat_message(payload: ChatMessageBody, request: Request, user=Depends(require_roles("super_admin", "institution_admin", "tpo", "faculty"))):
+    if not payload.content.strip():
+        raise HTTPException(400, "message required")
+    iid = _partner_scope(user, payload.institution_id)
+    room = (await get_chat_room(iid, user))["room"]
+    item = {
+        "message_id": f"msg_{uuid.uuid4().hex[:10]}",
+        "room_id": room["room_id"],
+        "institution_id": iid,
+        "sender_user_id": user.get("user_id"),
+        "sender_name": user.get("name") or user.get("email"),
+        "sender_role": user.get("role"),
+        "content": payload.content.strip(),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.chat_messages.insert_one(item)
+    await _audit_log("chat.message_sent", user=user, institution_id=iid, resource="chat_message", resource_id=item["message_id"], request=request)
+    clean = {k: v for k, v in item.items() if k != "_id"}
+    await ws_manager.broadcast(iid, {"type": "chat.message", "item": clean})
+    return {"success": True, "item": clean}
+
+
 # ============== REVENUE ==============
 class RevenueShareBody(BaseModel):
     institution_id: str
@@ -6005,7 +6307,7 @@ async def get_career_recommendations(user=Depends(get_session_user)):
     if user["role"] != "student":
         raise HTTPException(403, "Forbidden")
         
-    student = await db.students.find_one({"student_id": user["user_id"]})
+    student = await db.students.find_one({"student_id": user.get("student_id")}, {"_id": 0})
     dept = student.get("department", "CSE") if student else "CSE"
     
     recs = [

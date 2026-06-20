@@ -9,7 +9,7 @@ export default function StudentCareer() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.get("/api/me/career/recommendations")
+    api.get("/me/career/recommendations")
       .then(({ data }) => setRecs(data.recommendations || []))
       .catch(() => setRecs([]))
       .finally(() => setLoading(false));

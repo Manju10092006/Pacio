@@ -52,6 +52,10 @@ import Revenue from "./pages/Revenue";
 import StudentResume from "./pages/StudentResume";
 import StudentSkillGap from "./pages/StudentSkillGap";
 import StudentCareer from "./pages/StudentCareer";
+import StudentAIAnalysis from "./pages/StudentAIAnalysis";
+import WorkshopRequests from "./pages/WorkshopRequests";
+import PartnerBenchmarking from "./pages/PartnerBenchmarking";
+import PartnerChat from "./pages/PartnerChat";
 
 const AuthCtx = createContext(null);
 export const useAuth = () => useContext(AuthCtx);
@@ -138,6 +142,15 @@ function AppRouter() {
         <Route path="analytics" element={<AnalyticsWorkbench />} />
         <Route path="placements" element={<PlacementIntelligence />} />
         <Route path="announcements" element={<Announcements />} />
+        <Route path="mou" element={<MOU />} />
+        <Route path="fdp" element={<FDPManagement />} />
+        <Route path="revenue" element={<Revenue />} />
+        <Route path="reports" element={<Reports />} />
+        <Route path="comm-log" element={<CommLog />} />
+        <Route path="partner-chat" element={<PartnerChat />} />
+        <Route path="workshops" element={<WorkshopRequests />} />
+        <Route path="benchmarking" element={<PartnerBenchmarking />} />
+        <Route path="team" element={<TeamInvites />} />
       </Route>
 
       {/* ===== INSTITUTION ADMIN ===== */}
@@ -158,6 +171,9 @@ function AppRouter() {
         <Route path="announcements" element={<Announcements />} />
         <Route path="fdp" element={<FDPManagement />} />
         <Route path="revenue" element={<Revenue />} />
+        <Route path="partner-chat" element={<PartnerChat />} />
+        <Route path="workshops" element={<WorkshopRequests />} />
+        <Route path="benchmarking" element={<PartnerBenchmarking />} />
       </Route>
 
       {/* ===== TPO ===== */}
@@ -183,6 +199,9 @@ function AppRouter() {
         <Route path="fdp" element={<FDPManagement />} />
         <Route path="comm-log" element={<CommLog />} />
         <Route path="revenue" element={<Revenue />} />
+        <Route path="partner-chat" element={<PartnerChat />} />
+        <Route path="workshops" element={<WorkshopRequests />} />
+        <Route path="benchmarking" element={<PartnerBenchmarking />} />
       </Route>
 
       {/* ===== FACULTY ===== */}
@@ -196,6 +215,8 @@ function AppRouter() {
         <Route path="training" element={<Training />} />
         <Route path="interviews" element={<InterviewIntelligence />} />
         <Route path="fdp" element={<FDPManagement />} />
+        <Route path="workshops" element={<WorkshopRequests />} />
+        <Route path="benchmarking" element={<PartnerBenchmarking />} />
       </Route>
 
       {/* ===== STUDENT ===== */}
@@ -212,6 +233,7 @@ function AppRouter() {
         <Route path="announcements" element={<Announcements />} />
         <Route path="resume" element={<StudentResume />} />
         <Route path="skill-gap" element={<StudentSkillGap />} />
+        <Route path="ai-analysis" element={<StudentAIAnalysis />} />
         <Route path="career" element={<StudentCareer />} />
       </Route>
 

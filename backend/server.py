@@ -21,7 +21,8 @@ load_dotenv(Path(__file__).parent / ".env")
 import httpx
 from fastapi import FastAPI, HTTPException, Request, Response, Depends, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, StreamingResponse, RedirectResponse
+from urllib.parse import urlencode
 from fastapi.staticfiles import StaticFiles
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorGridFSBucket
 from pydantic import BaseModel, EmailStr
@@ -57,6 +58,9 @@ ROOT = Path(__file__).parent
 MONGO_URL = os.environ.get("MONGO_URL")
 DB_NAME = os.environ.get("DB_NAME", "careeros")
 EMERGENT_AUTH_URL = os.environ.get("EMERGENT_AUTH_URL", "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data")
+GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
+GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET")
+GOOGLE_REDIRECT_URI = os.environ.get("GOOGLE_REDIRECT_URI")
 ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "admin@careeros.app")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "careeros2026")
 DEFAULT_DEMO_PASSWORD = os.environ.get("DEFAULT_DEMO_PASSWORD", "careeros2026")
@@ -134,6 +138,29 @@ class SignupBody(BaseModel):
     department: Optional[str] = None
 
 
+class ForgotPasswordBody(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordBody(BaseModel):
+    token: str
+    new_password: str
+
+
+class RegisterBody(BaseModel):
+    role: Literal["student", "faculty", "recruiter", "tpo"]
+    name: str
+    email: EmailStr
+    password: str
+    roll_number: Optional[str] = None
+    department: Optional[str] = None
+    institution_id: Optional[str] = None
+    company_name: Optional[str] = None
+    college_name: Optional[str] = None
+    affiliated_university: Optional[str] = None
+    partnership_type: Optional[str] = None
+
+
 # ============== SESSION ==============
 def _cookie_secure(request: Request) -> bool:
     forced = os.environ.get("COOKIE_SECURE")
@@ -141,6 +168,16 @@ def _cookie_secure(request: Request) -> bool:
         return forced.lower() in {"1", "true", "yes", "on"}
     forwarded_proto = request.headers.get("x-forwarded-proto", "").split(",", 1)[0].strip().lower()
     return forwarded_proto == "https" or request.url.scheme == "https"
+
+
+def _public_origin(request: Request) -> str:
+    proto = request.headers.get("x-forwarded-proto", request.url.scheme).split(",", 1)[0].strip()
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host") or request.url.netloc
+    return f"{proto}://{host}"
+
+
+def _google_redirect_uri(request: Request) -> str:
+    return GOOGLE_REDIRECT_URI or f"{_public_origin(request)}/api/auth/google/callback"
 
 
 async def _create_session(user_id: str, response: Response, request: Request, token: Optional[str] = None) -> str:
@@ -991,6 +1028,10 @@ async def _startup():
     await db.resume_versions.create_index("student_id")
     await db.recruiter_shortlists.create_index("recruiter_id")
     await db.recruiter_saved_filters.create_index("recruiter_id")
+    await db.password_reset_tokens.create_index("token", unique=True)
+    await db.password_reset_tokens.create_index("expires_at", expireAfterSeconds=0)
+    await db.comm_log.create_index("institution_id")
+    await db.revenue_share.create_index("institution_id")
     n_inst = await db.institutions.count_documents({})
     if n_inst == 0:
         log.info("Seeding institutions, students, recruiters, DSA, aptitude…")
@@ -1978,6 +2019,8 @@ async def run_my_dsa_code(body: dict, request: Request, user=Depends(require_rol
     }
     await db.dsa_code_submissions.insert_one(record)
     await _audit_log("dsa.code_run", user=user, institution_id=student["institution_id"], resource="dsa_question", resource_id=question["question_id"], metadata={"status": result["status"]}, request=request)
+    if "_id" in record:
+        del record["_id"]
     return record
 
 
@@ -2033,6 +2076,8 @@ async def submit_my_dsa_code(body: dict, request: Request, user=Depends(require_
     )
     await _sync_topic_progress_from_questions(student, question["topic_code"])
     await _audit_log("dsa.code_submitted", user=user, institution_id=student["institution_id"], resource="dsa_question", resource_id=question["question_id"], metadata={"status": result["status"]}, request=request)
+    if "_id" in record:
+        del record["_id"]
     return record
 
 
@@ -2387,6 +2432,8 @@ async def start_my_aptitude_test(body: dict, request: Request, user=Depends(requ
         metadata={"mode": mode, "question_count": len(selected)},
         request=request,
     )
+    if "_id" in session:
+        del session["_id"]
     return {**session, "questions": [_public_aptitude_question(q) for q in selected]}
 
 
@@ -2521,6 +2568,8 @@ async def submit_my_aptitude_test(test_id: str, body: dict, request: Request, us
         metadata={"score_pct": score_pct, "accuracy_pct": accuracy_pct},
         request=request,
     )
+    if "_id" in attempt:
+        del attempt["_id"]
     return attempt
 
 
@@ -4579,6 +4628,8 @@ async def start_my_mock_interview(body: dict, request: Request, user=Depends(req
     }
     await db.mock_interview_sessions.insert_one(session)
     await _audit_log("interview.mock_started", user=user, institution_id=student["institution_id"], resource="mock_interview", resource_id=session["session_id"], metadata={"mode": mode}, request=request)
+    if "_id" in session:
+        del session["_id"]
     return session
 
 
@@ -5403,6 +5454,580 @@ async def college_action(body: dict, request: Request, admin=Depends(require_rol
     await db.institutions.update_one({"institution_id": institution_id}, {"$set": update})
     await _audit_log("institution.action", user=admin, institution_id=institution_id, resource="institution", resource_id=institution_id, metadata={"action": action, **update}, request=request)
     return {"success": True, "institution_id": institution_id, **update}
+
+
+# ============== GOOGLE OAUTH ==============
+@app.get("/api/auth/google/start")
+async def google_oauth_start(request: Request):
+    if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
+        raise HTTPException(503, "Google OAuth is not configured")
+
+    state = uuid.uuid4().hex
+    redirect_uri = _google_redirect_uri(request)
+    params = {
+        "client_id": GOOGLE_CLIENT_ID,
+        "redirect_uri": redirect_uri,
+        "response_type": "code",
+        "scope": "openid email profile",
+        "access_type": "offline",
+        "prompt": "select_account",
+        "state": state,
+    }
+    response = RedirectResponse(
+        "https://accounts.google.com/o/oauth2/v2/auth?" + urlencode(params),
+        status_code=302,
+    )
+    secure_cookie = _cookie_secure(request)
+    response.set_cookie(
+        key="oauth_state",
+        value=state,
+        httponly=True,
+        secure=secure_cookie,
+        samesite="none" if secure_cookie else "lax",
+        path="/",
+        max_age=10 * 60,
+    )
+    return response
+
+
+@app.get("/api/auth/google/callback")
+async def google_oauth_callback(request: Request):
+    if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
+        raise HTTPException(503, "Google OAuth is not configured")
+
+    code = request.query_params.get("code")
+    if not code:
+        raise HTTPException(400, "Google authorization code missing")
+
+    state = request.query_params.get("state")
+    cookie_state = request.cookies.get("oauth_state")
+    if cookie_state and state != cookie_state:
+        raise HTTPException(400, "Invalid Google OAuth state")
+
+    redirect_uri = _google_redirect_uri(request)
+    async with httpx.AsyncClient(timeout=15) as hx:
+        token_resp = await hx.post(
+            "https://oauth2.googleapis.com/token",
+            data={
+                "code": code,
+                "client_id": GOOGLE_CLIENT_ID,
+                "client_secret": GOOGLE_CLIENT_SECRET,
+                "redirect_uri": redirect_uri,
+                "grant_type": "authorization_code",
+            },
+            headers={"Accept": "application/json"},
+        )
+        if token_resp.status_code != 200:
+            await _audit_log(
+                "auth.google_token_failed",
+                outcome="failure",
+                metadata={"status_code": token_resp.status_code},
+                request=request,
+            )
+            raise HTTPException(401, "Google token exchange failed")
+
+        token_data = token_resp.json()
+        id_token = token_data.get("id_token")
+        if not id_token:
+            raise HTTPException(401, "Google ID token missing")
+
+        profile_resp = await hx.get(
+            "https://oauth2.googleapis.com/tokeninfo",
+            params={"id_token": id_token},
+        )
+        if profile_resp.status_code != 200:
+            raise HTTPException(401, "Google profile validation failed")
+        profile = profile_resp.json()
+
+    if profile.get("aud") != GOOGLE_CLIENT_ID:
+        raise HTTPException(401, "Invalid Google audience")
+    if str(profile.get("email_verified", "")).lower() not in {"true", "1"}:
+        raise HTTPException(401, "Google email is not verified")
+
+    email = profile["email"].lower()
+    name = profile.get("name") or email
+    picture = profile.get("picture")
+    existing = await db.users.find_one({"email": email})
+    if existing:
+        user_id = existing["user_id"]
+        await db.users.update_one(
+            {"user_id": user_id},
+            {"$set": {"name": name or existing.get("name"), "picture": picture}},
+        )
+    else:
+        is_admin = email == ADMIN_EMAIL
+        new = _new_user(
+            email=email,
+            name=name,
+            role="super_admin" if is_admin else "tpo",
+            institution_id=None,
+            password=None,
+            approved=is_admin,
+        )
+        new["picture"] = picture
+        await db.users.insert_one(new)
+        user_id = new["user_id"]
+
+    user_doc = await db.users.find_one({"user_id": user_id}, {"_id": 0, "password_hash": 0})
+    target = "/app" if user_doc.get("approved") or user_doc.get("role") == "super_admin" else "/pending"
+    response = RedirectResponse(url=target, status_code=303)
+    response.delete_cookie("oauth_state", path="/")
+    await _create_session(user_id, response, request, token=token_data.get("access_token"))
+    await _audit_log("auth.google_oauth", user=user_doc, request=request)
+    return response
+
+
+# ============== EXTRA AUTH ENDPOINTS ==============
+@app.post("/api/auth/forgot-password")
+async def forgot_password(body: ForgotPasswordBody, request: Request):
+    email = body.email.lower().strip()
+    user = await db.users.find_one({"email": email})
+    if not user:
+        raise HTTPException(404, "User not found")
+    
+    token = str(uuid.uuid4())
+    expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
+    
+    await db.password_reset_tokens.update_one(
+        {"email": email},
+        {"$set": {"token": token, "expires_at": expires_at}},
+        upsert=True
+    )
+    
+    reset_url = f"{_public_origin(request)}/reset-password?token={token}"
+    await notify(
+        db,
+        event="auth.password_reset",
+        to_email=email,
+        subject="Reset Your CareerOS Password",
+        title="Password Reset Request",
+        body_html=f"Please reset your password using <a href='{reset_url}'>this link</a>."
+    )
+    
+    return {"success": True}
+
+
+@app.post("/api/auth/reset-password")
+async def reset_password(body: ResetPasswordBody, request: Request):
+    tok_doc = await db.password_reset_tokens.find_one({"token": body.token})
+    if not tok_doc:
+        raise HTTPException(400, "Invalid or expired token")
+        
+    expires_at = tok_doc["expires_at"]
+    if isinstance(expires_at, str):
+        expires_at = datetime.fromisoformat(expires_at)
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+        
+    if expires_at < datetime.now(timezone.utc):
+        await db.password_reset_tokens.delete_one({"token": body.token})
+        raise HTTPException(400, "Token expired")
+        
+    email = tok_doc["email"]
+    password_hash = hash_password(body.new_password)
+    
+    await db.users.update_one({"email": email}, {"$set": {"password_hash": password_hash}})
+    await db.password_reset_tokens.delete_one({"token": body.token})
+    
+    await _audit_log("auth.password_reset_complete", metadata={"email": email}, request=request)
+    return {"success": True}
+
+
+@app.post("/api/auth/refresh")
+async def auth_refresh(request: Request, response: Response):
+    token = request.cookies.get("session_token")
+    auth = request.headers.get("authorization", "")
+    if auth.lower().startswith("bearer "):
+        token = auth[7:].strip()
+    if not token:
+        raise HTTPException(401, "Not authenticated")
+    
+    from auth import JWT_SECRET, JWT_ALGORITHM, JWT_ISSUER
+    import jwt
+    try:
+        claims = jwt.decode(
+            token,
+            JWT_SECRET,
+            algorithms=[JWT_ALGORITHM],
+            issuer=JWT_ISSUER,
+            options={"require": ["exp", "iat", "sub", "jti"], "verify_exp": False}
+        )
+    except jwt.InvalidTokenError as exc:
+        raise HTTPException(401, "Invalid session") from exc
+
+    jti = claims["jti"]
+    sess = await db.user_sessions.find_one({"jwt_id": jti})
+    if not sess:
+        raise HTTPException(401, "Session not found")
+    
+    expires_at = sess["expires_at"]
+    if isinstance(expires_at, str):
+        expires_at = datetime.fromisoformat(expires_at)
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+        
+    if expires_at < datetime.now(timezone.utc):
+        await db.user_sessions.delete_one({"jwt_id": jti})
+        raise HTTPException(401, "Session expired")
+    
+    user_id = sess["user_id"]
+    user = await db.users.find_one({"user_id": user_id}, {"_id": 0, "password_hash": 0})
+    if not user:
+        raise HTTPException(401, "User not found")
+        
+    new_token, new_jti, new_exp = create_access_token(user)
+    
+    await db.user_sessions.update_one(
+        {"jwt_id": jti},
+        {"$set": {
+            "session_token": new_token,
+            "jwt_id": new_jti,
+            "expires_at": new_exp.isoformat()
+        }}
+    )
+    
+    secure_cookie = _cookie_secure(request)
+    response.set_cookie(
+        key="session_token", value=new_token,
+        httponly=True, secure=secure_cookie, samesite="none" if secure_cookie else "lax", path="/",
+        max_age=7 * 24 * 60 * 60,
+    )
+    return {"access_token": new_token, "user": user}
+
+
+@app.post("/api/auth/register")
+async def auth_register(payload: RegisterBody, request: Request, response: Response):
+    email = payload.email.lower().strip()
+    existing = await db.users.find_one({"email": email})
+    if existing:
+        raise HTTPException(400, "Email already registered")
+        
+    approved = False
+    inst_id = payload.institution_id
+    
+    if payload.role == "student":
+        if not inst_id:
+            raise HTTPException(400, "Institution ID is required for students")
+        inst = await db.institutions.find_one({"institution_id": inst_id})
+        if not inst:
+            raise HTTPException(404, "Institution not found")
+        if inst.get("approved", True):
+            approved = True
+            
+    elif payload.role == "tpo":
+        if not payload.college_name:
+            raise HTTPException(400, "College name is required for TPO registration")
+        inst_id = f"inst_{uuid.uuid4().hex[:10]}"
+        short = payload.college_name.split()
+        short_name = "".join(w[0] for w in short).upper()[:6] if short else "COLL"
+        await db.institutions.insert_one({
+            "institution_id": inst_id,
+            "name": payload.college_name,
+            "short_name": short_name,
+            "affiliated_university": payload.affiliated_university or "JNTUH",
+            "partnership_type": payload.partnership_type or "CRT",
+            "departments": [payload.department] if payload.department else [],
+            "approved": False,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+        approved = False
+        
+    elif payload.role == "recruiter":
+        if not payload.company_name:
+            raise HTTPException(400, "Company name is required for recruiters")
+        approved = False
+        
+    elif payload.role == "faculty":
+        if not inst_id:
+            raise HTTPException(400, "Institution ID is required for faculty")
+        approved = False
+        
+    new_user_doc = _new_user(
+        email=email,
+        name=payload.name,
+        role=payload.role,
+        institution_id=inst_id,
+        password=payload.password,
+        approved=approved,
+        department=payload.department
+    )
+    
+    if payload.role == "recruiter":
+        new_user_doc["company_name"] = payload.company_name
+        await db.recruiters.insert_one({
+            "recruiter_id": new_user_doc["user_id"],
+            "name": payload.name,
+            "company": payload.company_name,
+            "email": email,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        })
+        
+    elif payload.role == "student":
+        await db.students.insert_one({
+            "student_id": new_user_doc["user_id"],
+            "name": payload.name,
+            "email": email,
+            "roll_number": payload.roll_number or f"STU{uuid.uuid4().hex[:6].upper()}",
+            "department": payload.department or "CSE",
+            "institution_id": inst_id,
+            "cgpa": 7.5,
+            "readiness_score": 50,
+            "consistency_score": 50,
+            "placement_status": "unplaced",
+            "skills": [],
+            "created_at": datetime.now(timezone.utc).isoformat()
+        })
+
+    await db.users.insert_one(new_user_doc)
+    await _audit_log("auth.register", user=new_user_doc, request=request)
+    
+    await notify(
+        db,
+        event="auth.register_welcome",
+        to_email=email,
+        subject="Welcome to CareerOS",
+        title="Welcome to CareerOS",
+        body_html=f"Hi {payload.name},<br/><br/>Thank you for registering on CareerOS as a {payload.role}. " + 
+                  ("Your account has been auto-approved and is ready to use!" if approved else "Your account is pending administrator approval.")
+    )
+    
+    if approved:
+        access_token = await _create_session(new_user_doc["user_id"], response, request)
+        return {
+            "status": "approved",
+            "user": {k: v for k, v in new_user_doc.items() if k not in ("password_hash", "_id")},
+            "access_token": access_token
+        }
+    else:
+        return {
+            "status": "pending_approval",
+            "message": "Registration successful. Pending admin approval."
+        }
+
+
+@app.get("/api/public/institutions")
+async def list_public_institutions():
+    items = await db.institutions.find({}, {"_id": 0, "institution_id": 1, "name": 1, "departments": 1}).to_list(100)
+    return {"items": items}
+
+
+# ============== COMM LOG CRUD ==============
+class CommLogBody(BaseModel):
+    type: Literal["meeting", "note", "follow_up", "comment"]
+    subject: str
+    summary: str
+    by: str
+
+
+class UpdateCommLogBody(BaseModel):
+    subject: Optional[str] = None
+    summary: Optional[str] = None
+
+
+@app.get("/api/comm-log")
+async def get_comm_logs(user=Depends(get_session_user)):
+    if user["role"] not in ("tpo", "faculty", "institution_admin", "super_admin"):
+        raise HTTPException(403, "Forbidden")
+    
+    query = {}
+    if user["role"] != "super_admin":
+        query["institution_id"] = user.get("institution_id")
+        
+    logs = await db.comm_log.find(query).sort("at", -1).to_list(100)
+    for l in logs:
+        l["log_id"] = str(l.get("log_id", ""))
+        if "_id" in l:
+            del l["_id"]
+    return {"items": logs}
+
+
+@app.post("/api/comm-log")
+async def create_comm_log(payload: CommLogBody, request: Request, user=Depends(get_session_user)):
+    if user["role"] not in ("tpo", "faculty", "institution_admin", "super_admin"):
+        raise HTTPException(403, "Forbidden")
+    
+    inst_id = user.get("institution_id")
+    if user["role"] == "super_admin":
+        inst_id = inst_id or "inst_kmit"
+        
+    log_doc = {
+        "log_id": f"log_{uuid.uuid4().hex[:10]}",
+        "institution_id": inst_id,
+        "type": payload.type,
+        "subject": payload.subject,
+        "summary": payload.summary,
+        "by": payload.by,
+        "at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.comm_log.insert_one(log_doc)
+    await _audit_log("comm_log.create", user=user, metadata={"log_id": log_doc["log_id"]}, request=request)
+    if "_id" in log_doc:
+        del log_doc["_id"]
+    return log_doc
+
+
+@app.patch("/api/comm-log/{log_id}")
+async def update_comm_log(log_id: str, payload: UpdateCommLogBody, request: Request, user=Depends(get_session_user)):
+    if user["role"] not in ("tpo", "faculty", "institution_admin", "super_admin"):
+        raise HTTPException(403, "Forbidden")
+        
+    existing = await db.comm_log.find_one({"log_id": log_id})
+    if not existing:
+        raise HTTPException(404, "Log entry not found")
+        
+    if user["role"] != "super_admin" and existing.get("institution_id") != user.get("institution_id"):
+        raise HTTPException(403, "Access denied")
+        
+    upd = {}
+    if payload.subject is not None:
+        upd["subject"] = payload.subject
+    if payload.summary is not None:
+        upd["summary"] = payload.summary
+        
+    if upd:
+        await db.comm_log.update_one({"log_id": log_id}, {"$set": upd})
+        await _audit_log("comm_log.update", user=user, metadata={"log_id": log_id}, request=request)
+        
+    updated = await db.comm_log.find_one({"log_id": log_id}, {"_id": 0})
+    return updated
+
+
+@app.delete("/api/comm-log/{log_id}")
+async def delete_comm_log(log_id: str, request: Request, user=Depends(get_session_user)):
+    if user["role"] not in ("tpo", "faculty", "institution_admin", "super_admin"):
+        raise HTTPException(403, "Forbidden")
+        
+    existing = await db.comm_log.find_one({"log_id": log_id})
+    if not existing:
+        raise HTTPException(404, "Log entry not found")
+        
+    if user["role"] != "super_admin" and existing.get("institution_id") != user.get("institution_id"):
+        raise HTTPException(403, "Access denied")
+        
+    await db.comm_log.delete_one({"log_id": log_id})
+    await _audit_log("comm_log.delete", user=user, metadata={"log_id": log_id}, request=request)
+    return {"ok": True}
+
+
+# ============== REVENUE ==============
+class RevenueShareBody(BaseModel):
+    institution_id: str
+    amount_inr: float
+    period: str
+    type: str
+
+
+@app.get("/api/revenue/me")
+async def get_my_revenue(user=Depends(get_session_user)):
+    if user["role"] not in ("tpo", "institution_admin", "super_admin"):
+        raise HTTPException(403, "Forbidden")
+        
+    inst_id = user.get("institution_id")
+    if not inst_id and user["role"] == "super_admin":
+        inst_id = "inst_kmit"
+        
+    records = await db.revenue_share.find({"institution_id": inst_id}).sort("date", -1).to_list(100)
+    for r in records:
+        if "_id" in r:
+            del r["_id"]
+            
+    total_accrued = sum(r.get("amount_inr", 0) for r in records)
+    expected = total_accrued * 1.1
+    
+    mou = await db.mous.find_one({"institution_id": inst_id})
+    mou_terms = {
+        "share_percentage": 15,
+        "billing_cycle": "Quarterly",
+        "partnership_type": mou.get("partnership_type", "CRT") if mou else "CRT"
+    }
+    
+    return {
+        "total_accrued_inr": total_accrued,
+        "expected_inr": expected,
+        "revenue_score": 85 if total_accrued > 0 else 0,
+        "payout_status": "Active" if total_accrued > 0 else "Pending",
+        "records": records,
+        "mou_terms": mou_terms
+    }
+
+
+@app.post("/api/revenue/share")
+async def create_revenue_share(payload: RevenueShareBody, request: Request, user=Depends(get_session_user)):
+    if user["role"] not in ("institution_admin", "super_admin"):
+        raise HTTPException(403, "Forbidden")
+        
+    doc = {
+        "revenue_id": f"rev_{uuid.uuid4().hex[:10]}",
+        "institution_id": payload.institution_id,
+        "amount_inr": payload.amount_inr,
+        "period": payload.period,
+        "type": payload.type,
+        "date": datetime.now(timezone.utc).isoformat()
+    }
+    await db.revenue_share.insert_one(doc)
+    await _audit_log("revenue.create", user=user, metadata={"revenue_id": doc["revenue_id"]}, request=request)
+    if "_id" in doc:
+        del doc["_id"]
+    return doc
+
+
+# ============== STUDENT WORKSPACE ==============
+class ResumeBuildBody(BaseModel):
+    template: str
+    sections: dict
+
+
+@app.post("/api/me/resume/build")
+async def build_student_resume(payload: ResumeBuildBody, request: Request, user=Depends(get_session_user)):
+    if user["role"] != "student":
+        raise HTTPException(403, "Forbidden")
+        
+    student_id = user["user_id"]
+    version_doc = {
+        "version_id": f"ver_{uuid.uuid4().hex[:10]}",
+        "student_id": student_id,
+        "template": payload.template,
+        "sections": payload.sections,
+        "ats_score": 75,
+        "pdf_url": f"/api/me/resume/download/{uuid.uuid4().hex[:10]}",
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.resume_versions.insert_one(version_doc)
+    await _audit_log("resume.build", user=user, metadata={"version_id": version_doc["version_id"]}, request=request)
+    if "_id" in version_doc:
+        del version_doc["_id"]
+    return version_doc
+
+
+@app.get("/api/me/career/recommendations")
+async def get_career_recommendations(user=Depends(get_session_user)):
+    if user["role"] != "student":
+        raise HTTPException(403, "Forbidden")
+        
+    student = await db.students.find_one({"student_id": user["user_id"]})
+    dept = student.get("department", "CSE") if student else "CSE"
+    
+    recs = [
+        {
+            "role": "Software Development Engineer",
+            "fit_percentage": 90 if dept in ("CSE", "IT") else 60,
+            "reason": "Strong logical skills and solid performance in the DSA module.",
+            "actions": ["Solve 50 more medium DSA questions", "Build a React + FastAPI project"]
+        },
+        {
+            "role": "Data Engineer / Analyst",
+            "fit_percentage": 85 if dept in ("CSE", "IT", "ECE") else 50,
+            "reason": "Good aptitude scores and logical thinking.",
+            "actions": ["Practice SQL queries", "Complete the data analysis workshop"]
+        },
+        {
+            "role": "System Engineer / DevOps",
+            "fit_percentage": 75 if dept in ("CSE", "ECE", "EEE") else 40,
+            "reason": "Compatible with department and basic networking understanding.",
+            "actions": ["Learn Docker basics", "Understand CI/CD pipelines"]
+        }
+    ]
+    return {"recommendations": recs}
 
 
 @app.get("/{full_path:path}")

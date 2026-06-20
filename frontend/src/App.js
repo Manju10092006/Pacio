@@ -44,6 +44,14 @@ import StudentATS from "./pages/StudentATS";
 import StudentInterviews from "./pages/StudentInterviews";
 import PlacementIntelligence from "./pages/PlacementIntelligence";
 import RecruiterAnalytics from "./pages/RecruiterAnalytics";
+import ResetPassword from "./pages/ResetPassword";
+import Register from "./pages/Register";
+import FDPManagement from "./pages/FDPManagement";
+import CommLog from "./pages/CommLog";
+import Revenue from "./pages/Revenue";
+import StudentResume from "./pages/StudentResume";
+import StudentSkillGap from "./pages/StudentSkillGap";
+import StudentCareer from "./pages/StudentCareer";
 
 const AuthCtx = createContext(null);
 export const useAuth = () => useContext(AuthCtx);
@@ -119,6 +127,8 @@ function AppRouter() {
       <Route path="/login" element={<Login />} />
       <Route path="/pending" element={<OnboardingPending />} />
       <Route path="/app" element={<RoleRedirect />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
+      <Route path="/register" element={<Register />} />
 
       {/* ===== PLATFORM (super admin) ===== */}
       <Route path="/platform" element={<Protected allow={["super_admin"]}><RoleLayout {...roleConfig.super_admin} /></Protected>}>
@@ -146,6 +156,8 @@ function AppRouter() {
         <Route path="mou" element={<MOU />} />
         <Route path="reports" element={<Reports />} />
         <Route path="announcements" element={<Announcements />} />
+        <Route path="fdp" element={<FDPManagement />} />
+        <Route path="revenue" element={<Revenue />} />
       </Route>
 
       {/* ===== TPO ===== */}
@@ -168,6 +180,9 @@ function AppRouter() {
         <Route path="reports" element={<Reports />} />
         <Route path="mou" element={<MOU />} />
         <Route path="announcements" element={<Announcements />} />
+        <Route path="fdp" element={<FDPManagement />} />
+        <Route path="comm-log" element={<CommLog />} />
+        <Route path="revenue" element={<Revenue />} />
       </Route>
 
       {/* ===== FACULTY ===== */}
@@ -180,6 +195,7 @@ function AppRouter() {
         <Route path="ats" element={<ATSIntelligence />} />
         <Route path="training" element={<Training />} />
         <Route path="interviews" element={<InterviewIntelligence />} />
+        <Route path="fdp" element={<FDPManagement />} />
       </Route>
 
       {/* ===== STUDENT ===== */}
@@ -194,6 +210,9 @@ function AppRouter() {
         <Route path="jobs" element={<Jobs />} />
         <Route path="schedule" element={<InterviewSchedule />} />
         <Route path="announcements" element={<Announcements />} />
+        <Route path="resume" element={<StudentResume />} />
+        <Route path="skill-gap" element={<StudentSkillGap />} />
+        <Route path="career" element={<StudentCareer />} />
       </Route>
 
       {/* ===== RECRUITER ===== */}

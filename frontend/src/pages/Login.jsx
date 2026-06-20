@@ -36,10 +36,27 @@ export default function Login() {
   const [email, setEmail] = useState("tpo@kmit.in");
   const [password, setPassword] = useState("careeros2026");
   const [busy, setBusy] = useState(false);
+  const [showForgot, setShowForgot] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
 
   const handleGoogle = () => {
-    const redirectUrl = window.location.origin + "/app";
-    window.location.href = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
+    window.location.href = "/api/auth/google/start";
+  };
+
+  const handleForgot = async (e) => {
+    e.preventDefault();
+    if (!forgotEmail) return;
+    setBusy(true);
+    try {
+      await api.post("/api/auth/forgot-password", { email: forgotEmail });
+      toast.success("Password reset email sent!");
+      setShowForgot(false);
+      setForgotEmail("");
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Failed to send reset email.");
+    } finally {
+      setBusy(false);
+    }
   };
 
   const handleLogin = async (e) => {
@@ -118,7 +135,12 @@ export default function Login() {
               </div>
             </label>
             <label className="block">
-              <span className="font-mono text-[10px] tracking-[0.24em] text-ink-400">PASSWORD</span>
+              <div className="flex justify-between items-center">
+                <span className="font-mono text-[10px] tracking-[0.24em] text-ink-400">PASSWORD</span>
+                <button type="button" onClick={() => setShowForgot(true)} className="font-mono text-[10px] text-accent tracking-wider hover:underline" data-testid="forgot-password-link">
+                  FORGOT?
+                </button>
+              </div>
               <div className="mt-2 flex items-center gap-2 border border-line bg-bone-50 px-3">
                 <Lock size={14} className="text-ink-400" />
                 <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" data-testid="login-password"
@@ -138,11 +160,48 @@ export default function Login() {
             Continue with Google
           </button>
 
+          <div className="mt-6 text-center text-xs text-ink-500">
+            Don't have an account? <Link to="/register" className="text-accent font-medium hover:underline" data-testid="register-link">Register here</Link>
+          </div>
+
           <p className="text-xs text-ink-400 mt-8 leading-relaxed">
             All demo accounts use password <span className="font-mono">careeros2026</span>. Institutional data is encrypted in transit and at rest.
           </p>
         </div>
       </div>
+
+      {showForgot && (
+        <div className="fixed inset-0 bg-ink-900/30 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white border border-line p-6 max-w-sm w-full space-y-4">
+            <div>
+              <h3 className="font-display text-xl tracking-tight">Forgot Password?</h3>
+              <p className="font-serif text-xs text-ink-500 mt-1">We will email you a password reset link.</p>
+            </div>
+            <form onSubmit={handleForgot} className="space-y-4">
+              <div className="flex items-center gap-2 border border-line bg-bone-50 px-3 py-2">
+                <Mail size={14} className="text-ink-400" />
+                <input
+                  type="email"
+                  placeholder="Your registered email"
+                  value={forgotEmail}
+                  onChange={(e) => setForgotEmail(e.target.value)}
+                  required
+                  className="bg-transparent text-xs w-full focus:outline-none"
+                  data-testid="forgot-email-input"
+                />
+              </div>
+              <div className="flex gap-2">
+                <button type="submit" disabled={busy} className="btn text-xs py-2 px-4 flex-1">
+                  {busy ? "Sending…" : "Send Link"}
+                </button>
+                <button type="button" onClick={() => setShowForgot(false)} className="btn btn-ghost text-xs py-2 px-4 border border-line">
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

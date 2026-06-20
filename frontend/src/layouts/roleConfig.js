@@ -1,4 +1,4 @@
-import { LayoutDashboard, Building2, Users, Layers, BarChart3, GraduationCap, FileText, Briefcase, Megaphone, Code2, Brain, FileSearch, MessageSquare, Send, Target, Network, FileBarChart, CalendarPlus, UserPlus } from "lucide-react";
+import { LayoutDashboard, Building2, Users, Layers, BarChart3, GraduationCap, FileText, Briefcase, Megaphone, Code2, Brain, FileSearch, MessageSquare, Send, Target, Network, FileBarChart, CalendarPlus, UserPlus, Compass } from "lucide-react";
 
 const item = (to, label, icon, key) => ({ to, label, icon, key });
 
@@ -42,6 +42,8 @@ export const roleConfig = {
         item("/institution/mou", "MOU vault", FileText, "mou"),
         item("/institution/reports", "Reports · exports", FileBarChart, "reports"),
         item("/institution/announcements", "Announcements", Megaphone, "ann"),
+        item("/institution/fdp", "FDP program", GraduationCap, "fdp"),
+        item("/institution/revenue", "Revenue share", BarChart3, "revenue"),
       ]},
     ],
   },
@@ -75,6 +77,9 @@ export const roleConfig = {
         item("/tpo/mou", "MOU · partnership", FileText, "mou"),
         item("/tpo/reports", "Reports · exports", FileBarChart, "reports"),
         item("/tpo/announcements", "Broadcasts", Megaphone, "ann"),
+        item("/tpo/fdp", "FDP program", GraduationCap, "fdp"),
+        item("/tpo/comm-log", "Comm logs", MessageSquare, "comm"),
+        item("/tpo/revenue", "Revenue share", BarChart3, "revenue"),
       ]},
     ],
   },
@@ -87,6 +92,7 @@ export const roleConfig = {
         item("/faculty", "My batches", LayoutDashboard, "overview"),
         item("/faculty/roster", "Students", Users, "roster"),
         item("/faculty/training", "Training completion", GraduationCap, "training"),
+        item("/faculty/fdp", "FDP program", GraduationCap, "fdp"),
       ]},
       { title: "Analytics", items: [
         item("/faculty/analytics", "Analytics engine", BarChart3, "analytics"),
@@ -108,12 +114,15 @@ export const roleConfig = {
         item("/student/aptitude", "Aptitude tracker", Brain, "aptitude"),
         item("/student/ats", "Resume ATS", FileSearch, "ats"),
         item("/student/interviews", "Interview prep", MessageSquare, "interviews"),
+        item("/student/resume", "Resume builder", FileText, "resume"),
+        item("/student/skill-gap", "Skill gap analysis", Target, "skill-gap"),
       ]},
       { title: "Opportunities", items: [
         item("/student/jobs", "Open drives", Briefcase, "jobs"),
         item("/student/applications", "My applications", Send, "apps"),
         item("/student/schedule", "Interview slots", CalendarPlus, "schedule"),
         item("/student/announcements", "Announcements", Megaphone, "ann"),
+        item("/student/career", "Career recommendations", Compass, "career"),
       ]},
     ],
   },

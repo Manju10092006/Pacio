@@ -1,4 +1,4 @@
-﻿"""Massive seed across institutions, departments (engineering/MBA/pharma/medical/diploma/degree),
+"""Massive seed across institutions, departments (engineering/MBA/pharma/medical/diploma/degree),
 students, recruiters, jobs, applications, DSA progress (Striver A2Z), aptitude, ATS, interviews,
 announcements, training programs, and KMIT real placement data 2017-18 â†’ 2025-26.
 """
@@ -67,6 +67,90 @@ YEAR_AGGREGATES = {
 
 # ============== INSTITUTIONS (multi-stream) ==============
 INSTITUTIONS = [
+    {
+        "institution_id": "inst_vnr",
+        "name": "VNR Vignana Jyothi Institute of Engineering & Technology",
+        "short_name": "VNRVJIET",
+        "type": "Engineering",
+        "city": "Hyderabad", "state": "Telangana",
+        "affiliated_university": "JNTUH",
+        "departments": ["CSE", "IT", "ECE", "EEE", "Mech"],
+        "established": 1995,
+        "logo": "V",
+        "tagline": "Engineering Excellence and Innovation.",
+    },
+    {
+        "institution_id": "inst_vce",
+        "name": "Vasavi College of Engineering",
+        "short_name": "VCE",
+        "type": "Engineering",
+        "city": "Hyderabad", "state": "Telangana",
+        "affiliated_university": "Osmania University",
+        "departments": ["CSE", "IT", "ECE", "EEE", "Mech", "Civil"],
+        "established": 1981,
+        "logo": "V",
+        "tagline": "Education for professional competence.",
+    },
+    {
+        "institution_id": "inst_cbit",
+        "name": "Chaitanya Bharathi Institute of Technology",
+        "short_name": "CBIT",
+        "type": "Engineering",
+        "city": "Hyderabad", "state": "Telangana",
+        "affiliated_university": "Osmania University",
+        "departments": ["CSE", "IT", "ECE", "EEE", "Mech"],
+        "established": 1979,
+        "logo": "C",
+        "tagline": "Swayam Tejaswin Bhava.",
+    },
+    {
+        "institution_id": "inst_cvr",
+        "name": "CVR College of Engineering",
+        "short_name": "CVR",
+        "type": "Engineering",
+        "city": "Hyderabad", "state": "Telangana",
+        "affiliated_university": "JNTUH",
+        "departments": ["CSE", "IT", "ECE", "EEE", "Mech"],
+        "established": 2001,
+        "logo": "C",
+        "tagline": "In pursuit of excellence.",
+    },
+    {
+        "institution_id": "inst_mgit",
+        "name": "Mahatma Gandhi Institute of Technology",
+        "short_name": "MGIT",
+        "type": "Engineering",
+        "city": "Hyderabad", "state": "Telangana",
+        "affiliated_university": "JNTUH",
+        "departments": ["CSE", "IT", "ECE", "EEE", "Mech"],
+        "established": 1997,
+        "logo": "M",
+        "tagline": "Chaitanya Samskrithi.",
+    },
+    {
+        "institution_id": "inst_mvsrec",
+        "name": "MVSR Engineering College",
+        "short_name": "MVSREC",
+        "type": "Engineering",
+        "city": "Hyderabad", "state": "Telangana",
+        "affiliated_university": "Osmania University",
+        "departments": ["CSE", "IT", "ECE", "EEE", "Mech"],
+        "established": 1981,
+        "logo": "M",
+        "tagline": "Excellence in education and character.",
+    },
+    {
+        "institution_id": "inst_bvrit",
+        "name": "BVRIT Hyderabad",
+        "short_name": "BVRIT",
+        "type": "Engineering",
+        "city": "Hyderabad", "state": "Telangana",
+        "affiliated_university": "JNTUH",
+        "departments": ["CSE", "IT", "ECE", "EEE"],
+        "established": 2012,
+        "logo": "B",
+        "tagline": "Empowering women in engineering.",
+    },
     {
         "institution_id": "inst_kmit",
         "name": "Keshav Memorial Institute of Technology",
@@ -217,7 +301,7 @@ def seed_payload() -> dict:
         "jobs": [], "applications": [], "dsa_questions": [], "dsa_progress": [], "dsa_question_progress": [], "aptitude_scores": [],
         "ats_reports": [], "interview_reports": [], "announcements": [],
         "training_programs": [], "enrollments": [], "placement_records": [],
-        "year_summaries": [], "mous": [], "comm_log": [],
+        "year_summaries": [], "mous": [], "comm_log": [], "revenue_share": [],
     }
     question_bank = build_dsa_question_bank(now)
     questions_by_topic = question_bank_by_topic(now)
@@ -359,7 +443,7 @@ def seed_payload() -> dict:
             student_pool.append(stu)
 
     # -- DSA progress (Striver A2Z) for engineering students --
-    eng_students = [s for s in student_pool if s["institution_id"] in ("inst_kmit",)]
+    eng_students = [s for s in student_pool if s["institution_id"] in ("inst_kmit", "inst_vnr", "inst_vce", "inst_cbit", "inst_cvr", "inst_mgit", "inst_mvsrec", "inst_bvrit")]
     for s in eng_students:
         # Higher CGPA â†’ higher solve rate
         skill_factor = (s["cgpa"] - 6.0) / 4.0  # 0.1 â†’ 0.95
@@ -573,5 +657,61 @@ def seed_payload() -> dict:
          "summary": "TPO requested revised seat allocation for 2026-27 batch.",
          "by": "Dr. Neil Gogte (TPO)", "at": (now - timedelta(days=11)).isoformat()},
     ])
+
+    # -- MOUs, comm logs, and revenue share for new institutions --
+    for inst in INSTITUTIONS:
+        if inst["institution_id"] == "inst_kmit":
+            continue
+        
+        # MOU
+        mou_id = f"mou_{inst['short_name'].lower()}"
+        docs["mous"].append({
+            "mou_id": mou_id,
+            "institution_id": inst["institution_id"],
+            "partnership_type": "CRT + FDP",
+            "signed_on": (now - timedelta(days=200)).isoformat(),
+            "expires_on": (now + timedelta(days=165)).isoformat(),
+            "document_name": f"Skill-Tank-{inst['short_name']}-MOU.pdf",
+            "document_size_kb": 512,
+            "seats_purchased": 120,
+            "seats_used": random.randint(45, 95),
+            "revenue_share_pct": 15.0,
+            "accrued_share_inr": random.randint(250_000, 950_000),
+            "payout_status": "Quarterly",
+            "status": "active",
+        })
+
+        # Comm log
+        docs["comm_log"].extend([
+            {
+                "log_id": f"cl_{uuid.uuid4().hex[:8]}",
+                "institution_id": inst["institution_id"],
+                "type": "meeting",
+                "subject": "Initial onboarding alignment",
+                "summary": "Completed portal walkthrough and user training for faculty.",
+                "by": "Ananya Reddy (Skill Tank AM)",
+                "at": (now - timedelta(days=25)).isoformat()
+            },
+            {
+                "log_id": f"cl_{uuid.uuid4().hex[:8]}",
+                "institution_id": inst["institution_id"],
+                "type": "note",
+                "subject": "FDP interest discussion",
+                "summary": "Faculty expressed interest in advanced AI/ML FDP workshops.",
+                "by": "TPO Coordinator",
+                "at": (now - timedelta(days=10)).isoformat()
+            }
+        ])
+
+        # Revenue share records
+        for i in range(1, 4):
+            docs["revenue_share"].append({
+                "revenue_id": f"rev_{uuid.uuid4().hex[:10]}",
+                "institution_id": inst["institution_id"],
+                "amount_inr": float(random.randint(50_000, 150_000)),
+                "period": f"Q{i} 2025",
+                "type": "CRT Share" if i % 2 == 0 else "FDP Program",
+                "date": (now - timedelta(days=i * 90)).isoformat()
+            })
 
     return docs

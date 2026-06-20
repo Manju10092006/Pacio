@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { toast } from "sonner";
-import { User, Mail, Lock, Building, GraduationCap, Briefcase, FileBadge } from "lucide-react";
+import { User, Mail, Lock, Building, GraduationCap, Briefcase } from "lucide-react";
 
 const ROLES = [
   { id: "student", label: "Student", icon: GraduationCap },

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { useAuth } from "../App";
-import { Award, Briefcase, ChevronRight, Compass, Sparkles } from "lucide-react";
+import { Briefcase, ChevronRight, Compass, Sparkles } from "lucide-react";
 
 export default function StudentCareer() {
   useAuth();

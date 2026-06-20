@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { useAuth } from "../App";
 import { toast } from "sonner";
-import { Plus, X, Users, Clock, Calendar, CheckCircle, ChevronRight } from "lucide-react";
+import { Plus, X, Users, Calendar, CheckCircle } from "lucide-react";
 
 const emptyForm = { topic: "", date: "", duration_hours: 1, faculty_emails: "" };
 
@@ -56,6 +56,7 @@ export default function FDPManagement() {
     try {
       await api.post("/fdp/attendance", { session_id, attendees });
       toast.success("Attendance updated");
+      setSelected((curr) => curr && curr.session_id === session_id ? { ...curr, attendees } : curr);
       load();
     } catch {
       toast.error("Could not update attendance");
@@ -225,9 +226,17 @@ export default function FDPManagement() {
               {(selected.attendees || []).map((a, i) => (
                 <div key={a.faculty_id || i} className="flex items-center justify-between py-2 border-b border-bone-100/10">
                   <span className="text-sm">{a.name || a.faculty_id}</span>
-                  <span className={`font-mono text-[10px] ${a.present ? "text-accent" : "text-bone-100/40"}`}>
+                  <button
+                    onClick={() => {
+                      const updated = selected.attendees.map((att, idx) =>
+                        idx === i ? { ...att, present: !att.present } : att
+                      );
+                      markAttendance(selected.session_id, updated);
+                    }}
+                    className={`font-mono text-[10px] cursor-pointer hover:text-accent transition-colors ${a.present ? "text-accent" : "text-bone-100/40"}`}
+                  >
                     {a.present ? "● PRESENT" : "○ ABSENT"}
-                  </span>
+                  </button>
                 </div>
               ))}
               {(!selected.attendees || selected.attendees.length === 0) && (

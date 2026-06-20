@@ -158,6 +158,9 @@ class MemoryCollection:
                 del self.rows[index]
                 break
 
+    async def delete_many(self, query: dict[str, Any]):
+        self.rows = [row for row in self.rows if not _matches(row, query)]
+
     def aggregate(self, pipeline: list[dict[str, Any]]) -> MemoryCursor:
         rows = copy.deepcopy(self.rows)
         for step in pipeline:

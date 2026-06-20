@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { useAuth } from "../App";
 import { Calendar, MapPin, Plus, X, Search, Bookmark, ExternalLink, Briefcase } from "lucide-react";
+import CompanyLogo from "../components/CompanyLogo";
 import { toast } from "sonner";
 
 const emptyJob = {
@@ -239,13 +240,16 @@ export default function Jobs() {
                 className="col-span-12 md:col-span-6 lg:col-span-4 editorial p-7 group hover:border-ink-900 transition-colors"
                 data-testid={`job-${i}`}
               >
-                <div className="flex items-start justify-between">
-                  <div>
-                    <div className="font-mono text-[10px] tracking-[0.24em] text-ink-400">
-                      {j.status?.toUpperCase()} / {j.location}
-                    </div>
-                    <div className="font-display text-2xl mt-1 tracking-tight group-hover:text-accent transition-colors">
-                      {j.company}
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <CompanyLogo name={j.company} className="w-10 h-10" />
+                    <div>
+                      <div className="font-mono text-[10px] tracking-[0.24em] text-ink-400">
+                        {j.status?.toUpperCase()} / {j.location}
+                      </div>
+                      <div className="font-display text-2xl mt-1 tracking-tight group-hover:text-accent transition-colors">
+                        {j.company}
+                      </div>
                     </div>
                     <div className="text-sm text-ink-700 mt-1">{j.title}</div>
                   </div>

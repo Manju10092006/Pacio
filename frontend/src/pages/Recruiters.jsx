@@ -1,8 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { api } from "../lib/api";
 import { BarChart3, Briefcase, Building2, ChevronDown, LayoutGrid, List, Search, TrendingUp } from "lucide-react";
-
-const initials = (name = "R") => name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase();
+import CompanyLogo from "../components/CompanyLogo";
 
 export default function Recruiters() {
   const [items, setItems] = useState([]);
@@ -106,9 +105,7 @@ export default function Recruiters() {
                     data-testid={`rec-${i}`}
                   >
                     <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 border border-line bg-bone-100 grid place-items-center font-display text-xl text-accent">
-                        {initials(r.name)}
-                      </div>
+                      <CompanyLogo name={r.name} className="w-12 h-12 border border-line p-1" />
                       <div className="min-w-0 flex-1">
                         <div className="font-display text-2xl tracking-tight truncate">{r.name}</div>
                         <div className="font-mono text-[10px] tracking-[0.18em] text-ink-400 uppercase">{r.industry}</div>

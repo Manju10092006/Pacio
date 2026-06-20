@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { toast } from "sonner";
+import AICopilot from "../components/AICopilot";
 
 export default function RecruiterAnalytics() {
   const [analytics, setAnalytics] = useState(null);
@@ -51,6 +52,8 @@ export default function RecruiterAnalytics() {
           <div className="text-bone-100/60 text-sm">{pipeline.conversion_rate || a.conversion_rate || 0}% conversion rate</div>
         </div>
       </div>
+
+      <AICopilot surface="recruiter-analytics" />
 
       <div className="grid grid-cols-12 gap-3">
         {[

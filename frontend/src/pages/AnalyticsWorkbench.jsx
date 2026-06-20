@@ -16,6 +16,7 @@ import {
   Cell,
 } from "recharts";
 import { ArrowUpRight, BrainCircuit, Gauge, Route, ShieldCheck, Zap } from "lucide-react";
+import AICopilot from "../components/AICopilot";
 
 const fmt = (value, digits = 0) => {
   const n = Number(value || 0);
@@ -92,6 +93,8 @@ export default function AnalyticsWorkbench() {
           <span className="pill pill-accent">Health / {summary.health || "watch"}</span>
         </div>
       </div>
+
+      <AICopilot surface="analytics-workbench" />
 
       <section className="grid grid-cols-12 gap-3" data-testid="analytics-kpis">
         <div className="col-span-12 md:col-span-3 editorial bg-ink-900 text-bone-100 p-7">

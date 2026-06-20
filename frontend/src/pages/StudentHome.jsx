@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { api } from "../lib/api";
 import { useAuth } from "../App";
 import { Code2, TrendingUp, Award, Briefcase, ChevronRight, Eye, ShieldCheck, Copy } from "lucide-react";
@@ -6,11 +6,72 @@ import { Link } from "react-router-dom";
 import { Badge, Progress, EmptyState } from "../components/Primitives";
 import { PageTransition, DashboardReveal, CounterAnimation } from "../components/Motion";
 import { toast } from "sonner";
+import { renderCertificateToCanvas, CERTIFICATE_TYPES } from "../lib/certificateRenderer";
+import { pdf } from "@react-pdf/renderer";
+import { BulkCertificatesDocument } from "../components/BulkCertificates";
 
 export default function StudentHome() {
   useAuth();
   const [d, setD] = useState(null);
   const [workspace, setWorkspace] = useState(null);
+  const [showCertificate, setShowCertificate] = useState(false);
+  const [selectedCertType, setSelectedCertType] = useState("CRT");
+  const [isGenerating, setIsGenerating] = useState(false);
+  const canvasRef = useRef(null);
+
+  useEffect(() => {
+    if (showCertificate && canvasRef.current && s) {
+      const canvas = canvasRef.current;
+      const collegeName = s.institution_id === "inst_kmit" ? "Keshav Memorial Institute of Technology" : (s.institution_id?.replace("inst_", "").toUpperCase() + " Engineering College");
+      const certTypeData = CERTIFICATE_TYPES[selectedCertType];
+      const certId = `ST-${selectedCertType}-${s.student_id?.slice(4, 10).toUpperCase() || "XXXX"}`;
+      const dateStr = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+      
+      const certData = {
+        title: certTypeData.title,
+        description: certTypeData.description,
+        studentName: s.name,
+        rollNumber: s.roll_number,
+        branch: s.department || "CSE",
+        collegeName: collegeName,
+        certId: certId,
+        date: dateStr,
+        signatureTpo: "Dr. Neil Gogte",
+        signatureSkillTank: "Skill Tank Director"
+      };
+      
+      renderCertificateToCanvas(canvas, certData);
+    }
+  }, [showCertificate, selectedCertType, d]);
+
+  const downloadPNG = () => {
+    if (!canvasRef.current) return;
+    const link = document.createElement("a");
+    link.download = `${s.name.replace(/\s+/g, "_")}_${selectedCertType}_certificate.png`;
+    link.href = canvasRef.current.toDataURL("image/png");
+    link.click();
+  };
+
+  const downloadPDF = async () => {
+    if (!canvasRef.current) return;
+    setIsGenerating(true);
+    try {
+      const imgData = canvasRef.current.toDataURL("image/png");
+      const docInstance = <BulkCertificatesDocument images={[imgData]} />;
+      const blob = await pdf(docInstance).toBlob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${s.name.replace(/\s+/g, "_")}_${selectedCertType}_certificate.pdf`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      toast.error("Error generating PDF certificate");
+      console.error(err);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
   useEffect(() => {
     api.get("/me/dashboard").then(({ data }) => setD(data)).catch(() => {});
@@ -221,6 +282,23 @@ export default function StudentHome() {
         </DashboardReveal>
       )}
 
+      {/* Certifications Widget */}
+      <div className="editorial p-8 bg-paper border border-line">
+        <div className="font-mono text-[10px] tracking-[0.24em] text-ink-400 mb-2">PARTNERSHIP CREDENTIALS</div>
+        <h3 className="font-display text-2xl tracking-tight mb-3 flex items-center gap-2">
+          Co-branded Certificates <Award size={18} className="text-accent" />
+        </h3>
+        <p className="font-serif text-sm text-ink-500 max-w-2xl leading-relaxed">
+          Upon satisfying the baseline readiness parameters (DSA solve rate, Aptitude accuracy, and ATS benchmarks), you are eligible to generate your Placement Partner co-branded certificate.
+        </p>
+        <button
+          onClick={() => setShowCertificate(true)}
+          className="mt-5 btn bg-ink text-bone-100 hover:bg-ink-800 text-xs py-2 px-4"
+        >
+          View Certificate
+        </button>
+      </div>
+
       {/* DSA breakdown + Recommended jobs */}
       <div className="grid grid-cols-12 gap-4">
         <div className="col-span-12 md:col-span-7 editorial p-8" data-testid="student-dsa-panel">
@@ -266,6 +344,63 @@ export default function StudentHome() {
           </div>
         </div>
       </div>
+      {showCertificate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ink/75 backdrop-blur-sm overflow-y-auto">
+          <div className="relative max-w-4xl w-full border border-line bg-bone-50 p-6 md:p-8 shadow-2xl my-8">
+            <button
+              onClick={() => setShowCertificate(false)}
+              className="absolute top-4 right-4 text-xs font-mono tracking-widest text-ink-400 hover:text-accent uppercase cursor-pointer"
+            >
+              [ Close ]
+            </button>
+            <div className="flex flex-col md:flex-row justify-between items-stretch gap-6 mt-4">
+              <div className="w-full md:w-3/4 flex flex-col items-center">
+                {/* Live Canvas Preview */}
+                <div className="w-full border border-line bg-white p-2 shadow-sm">
+                  <canvas ref={canvasRef} className="w-full h-auto max-h-[500px] object-contain" />
+                </div>
+              </div>
+              <div className="w-full md:w-1/4 flex flex-col justify-between">
+                <div className="space-y-5">
+                  <div>
+                    <div className="font-mono text-[9px] tracking-[0.2em] text-ink-400 uppercase">Credentialing</div>
+                    <h4 className="font-display text-lg tracking-tight mt-1">Configure Certificate</h4>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="block text-xs font-mono text-ink-500 uppercase">Certificate Type</label>
+                    <select
+                      value={selectedCertType}
+                      onChange={(e) => setSelectedCertType(e.target.value)}
+                      className="w-full border border-line bg-bone-100 p-2 text-sm focus:outline-none"
+                    >
+                      <option value="CRT">CRT Certificate</option>
+                      <option value="WORKSHOP">Workshop Certificate</option>
+                      <option value="HACKATHON">Hackathon Certificate</option>
+                      <option value="INTERNSHIP">Internship Certificate</option>
+                      <option value="PLACEMENT">Placement Achievement</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="pt-6 border-t border-line space-y-2 mt-6 md:mt-0">
+                  <button
+                    onClick={downloadPNG}
+                    className="w-full btn bg-bone-100 border-line hover:bg-paper text-ink-900 text-xs py-2.5"
+                  >
+                    Download PNG
+                  </button>
+                  <button
+                    onClick={downloadPDF}
+                    disabled={isGenerating}
+                    className="w-full btn bg-ink text-bone-100 hover:bg-ink-800 text-xs py-2.5 flex items-center justify-center gap-2"
+                  >
+                    {isGenerating ? "Generating..." : "Download PDF"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </PageTransition>
   );
 }

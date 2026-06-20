@@ -153,6 +153,35 @@ export default function PlacementIntelligence() {
         </div>
       )}
 
+      {ov.placement_records && ov.placement_records.length > 0 && (
+        <div className="editorial p-8 bg-bone-50">
+          <div className="font-mono text-[10px] tracking-[0.24em] text-ink-400">HISTORICAL HIRING COMPANIES</div>
+          <h3 className="font-display text-2xl tracking-tight mt-1 mb-6">Track record across companies</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="border-b border-line text-[10px] font-mono tracking-wider text-ink-400 uppercase">
+                  <th className="pb-3">Academic Year</th>
+                  <th className="pb-3">Company</th>
+                  <th className="pb-3 text-right">Selects</th>
+                  <th className="pb-3 text-right">CTC (LPA)</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line text-sm">
+                {ov.placement_records.slice(0, 15).map((rec, i) => (
+                  <tr key={rec.record_id || i} className="hover:bg-bone-100/50 transition-colors">
+                    <td className="py-3 font-mono">{rec.academic_year}</td>
+                    <td className="py-3 font-semibold">{rec.company}</td>
+                    <td className="py-3 text-right font-mono tnum">{rec.selects}</td>
+                    <td className="py-3 text-right font-mono tnum text-accent">₹{rec.ctc_lpa} L</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {recruiterConversion.length > 0 && (
         <div className="editorial">
           <div className="p-6 border-b border-line">

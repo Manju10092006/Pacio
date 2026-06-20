@@ -90,6 +90,22 @@ export default function PlatformControl() {
             <Search size={14} />
             <span>Search institutions, recruiters, audits...</span>
           </div>
+          <button 
+            onClick={async () => {
+              if (window.confirm("Are you sure you want to reseed missing demo data? This will safely insert any missing colleges, students, and recruiters without deleting any existing records.")) {
+                try {
+                  await api.post("/admin/reseed-demo");
+                  alert("Demo database reseeded successfully.");
+                  window.location.reload();
+                } catch (e) {
+                  alert("Error reseeding database: " + (e.response?.data?.detail || e.message));
+                }
+              }
+            }}
+            className="btn bg-rose-750 border-rose-750 hover:bg-rose-800 hover:border-rose-800 text-bone-100"
+          >
+            Reseed Missing Demo Data
+          </button>
           <Link to="/platform/institutions" className="btn">
             Review queue <ArrowUpRight size={14} />
           </Link>

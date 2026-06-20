@@ -3,6 +3,7 @@ import { api } from "../lib/api";
 import { useAuth } from "../App";
 import { toast } from "sonner";
 import { Save, Edit3 } from "lucide-react";
+import AICopilot from "../components/AICopilot";
 
 export default function CollegeProfile() {
   const { user } = useAuth();
@@ -86,6 +87,8 @@ export default function CollegeProfile() {
           </div>
         </div>
       </div>
+
+      <AICopilot surface="institution-analytics" />
     </div>
   );
 }

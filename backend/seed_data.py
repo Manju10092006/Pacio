@@ -164,6 +164,522 @@ INSTITUTIONS = [
         "tagline": "Where placement intelligence is born.",
     },
     {
+        "institution_id": "inst_mrec",
+        "name": "Malla Reddy Engineering College",
+        "short_name": "MREC",
+        "type": "Engineering",
+        "city": "Hyderabad", "state": "Telangana",
+        "affiliated_university": "JNTUH",
+        "departments": ["CSE", "IT", "ECE", "EEE", "Mech"],
+        "established": 2002,
+        "logo": "M",
+        "tagline": "Step into light.",
+    },
+    {
+        "institution_id": "inst_mrcet",
+        "name": "Malla Reddy College of Engineering & Technology",
+        "short_name": "MRCET",
+        "type": "Engineering",
+        "city": "Hyderabad", "state": "Telangana",
+        "affiliated_university": "JNTUH",
+        "departments": ["CSE", "IT", "ECE", "EEE", "Mech"],
+        "established": 2004,
+        "logo": "M",
+        "tagline": "Quality education is our mission.",
+    },
+    {
+        "institution_id": "inst_mrits",
+        "name": "Malla Reddy Institute of Technology & Science",
+        "short_name": "MRITS",
+        "type": "Engineering",
+        "city": "Hyderabad", "state": "Telangana",
+        "affiliated_university": "JNTUH",
+        "departments": ["CSE", "IT", "ECE", "EEE"],
+        "established": 2005,
+        "logo": "M",
+        "tagline": "Nurturing engineering talent.",
+    },
+    {
+        "institution_id": "inst_snist",
+        "name": "Sreenidhi Institute of Science & Technology",
+        "short_name": "SNIST",
+        "type": "Engineering",
+        "city": "Hyderabad", "state": "Telangana",
+        "affiliated_university": "JNTUH",
+        "departments": ["CSE", "IT", "ECE", "EEE", "Mech"],
+        "established": 1997,
+        "logo": "S",
+        "tagline": "Leader in technological education.",
+    },
+    {
+        "institution_id": "inst_griet",
+        "name": "Gokaraju Rangaraju Institute of Engineering & Technology",
+        "short_name": "GRIET",
+        "type": "Engineering",
+        "city": "Hyderabad", "state": "Telangana",
+        "affiliated_university": "JNTUH",
+        "departments": ["CSE", "IT", "ECE", "EEE", "Mech"],
+        "established": 1997,
+        "logo": "G",
+        "tagline": "Knowledge is power.",
+    },
+    {
+        "institution_id": "inst_cmrcet",
+        "name": "CMR College of Engineering & Technology",
+        "short_name": "CMRCET",
+        "type": "Engineering",
+        "city": "Hyderabad", "state": "Telangana",
+        "affiliated_university": "JNTUH",
+        "departments": ["CSE", "IT", "ECE", "EEE", "Mech"],
+        "established": 2002,
+        "logo": "C",
+        "tagline": "Explore, Invent, Inspire.",
+    },
+    {
+        "institution_id": "inst_cmrit",
+        "name": "CMR Institute of Technology",
+        "short_name": "CMRIT",
+        "type": "Engineering",
+        "city": "Hyderabad", "state": "Telangana",
+        "affiliated_university": "JNTUH",
+        "departments": ["CSE", "IT", "ECE", "EEE"],
+        "established": 2005,
+        "logo": "C",
+        "tagline": "Technical education for global success.",
+    },
+    {
+        "institution_id": "inst_cmrtc",
+        "name": "CMR Technical Campus",
+        "short_name": "CMRTC",
+        "type": "Engineering",
+        "city": "Hyderabad", "state": "Telangana",
+        "affiliated_university": "JNTUH",
+        "departments": ["CSE", "IT", "ECE", "EEE", "Mech"],
+        "established": 2009,
+        "logo": "C",
+        "tagline": "Innovation and technical drive.",
+    },
+    {
+        "institution_id": "inst_au",
+        "name": "Anurag University",
+        "short_name": "AU",
+        "type": "Engineering",
+        "city": "Hyderabad", "state": "Telangana",
+        "affiliated_university": "Autonomous",
+        "departments": ["CSE", "IT", "ECE", "EEE", "Mech"],
+        "established": 2002,
+        "logo": "A",
+        "tagline": "Learn, Lead, and Achieve.",
+    },
+    {
+        "institution_id": "inst_gcet",
+        "name": "Geethanjali College of Engineering & Technology",
+        "short_name": "GCET",
+        "type": "Engineering",
+        "city": "Hyderabad", "state": "Telangana",
+        "affiliated_university": "JNTUH",
+        "departments": ["CSE", "IT", "ECE", "EEE"],
+        "established": 2005,
+        "logo": "G",
+        "tagline": "Shaping careers, building values.",
+    },
+    {
+        "institution_id": "inst_ace",
+        "name": "ACE Engineering College",
+        "short_name": "ACE",
+        "type": "Engineering",
+        "city": "Hyderabad", "state": "Telangana",
+        "affiliated_university": "JNTUH",
+        "departments": ["CSE", "IT", "ECE", "EEE"],
+        "established": 2007,
+        "logo": "A",
+        "tagline": "Gateway to global opportunities.",
+    },
+    {
+        "institution_id": "inst_gnits",
+        "name": "G. Narayanamma Institute of Technology & Science",
+        "short_name": "GNITS",
+        "type": "Engineering",
+        "city": "Hyderabad", "state": "Telangana",
+        "affiliated_university": "JNTUH",
+        "departments": ["CSE", "IT", "ECE", "EEE"],
+        "established": 1997,
+        "logo": "G",
+        "tagline": "Empowering women engineering professionals.",
+    },
+    {
+        "institution_id": "inst_jntuhceh",
+        "name": "JNTUH College of Engineering Hyderabad",
+        "short_name": "JNTUH-CEH",
+        "type": "Engineering",
+        "city": "Hyderabad", "state": "Telangana",
+        "affiliated_university": "JNTUH",
+        "departments": ["CSE", "IT", "ECE", "EEE", "Mech", "Civil"],
+        "established": 1965,
+        "logo": "J",
+        "tagline": "Frontrunner in technical education.",
+    },
+    {
+        "institution_id": "inst_ouce",
+        "name": "Osmania University College of Engineering",
+        "short_name": "OUCE",
+        "type": "Engineering",
+        "city": "Hyderabad", "state": "Telangana",
+        "affiliated_university": "Osmania University",
+        "departments": ["CSE", "ECE", "EEE", "Mech", "Civil"],
+        "established": 1929,
+        "logo": "O",
+        "tagline": "Pioneering technology and research.",
+    },
+    {
+        "institution_id": "inst_mjcet",
+        "name": "Muffakham Jah College of Engineering & Technology",
+        "short_name": "MJCET",
+        "type": "Engineering",
+        "city": "Hyderabad", "state": "Telangana",
+        "affiliated_university": "Osmania University",
+        "departments": ["CSE", "IT", "ECE", "EEE", "Mech", "Civil"],
+        "established": 1980,
+        "logo": "M",
+        "tagline": "Knowledge, Wisdom, Action.",
+    },
+    {
+        "institution_id": "inst_iare",
+        "name": "Institute of Aeronautical Engineering",
+        "short_name": "IARE",
+        "type": "Engineering",
+        "city": "Hyderabad", "state": "Telangana",
+        "affiliated_university": "JNTUH",
+        "departments": ["CSE", "IT", "ECE", "EEE", "Aeronautical"],
+        "established": 2000,
+        "logo": "I",
+        "tagline": "Liberation through education.",
+    },
+    {
+        "institution_id": "inst_vardhaman",
+        "name": "Vardhaman College of Engineering",
+        "short_name": "VCE-V",
+        "type": "Engineering",
+        "city": "Hyderabad", "state": "Telangana",
+        "affiliated_university": "JNTUH",
+        "departments": ["CSE", "IT", "ECE", "EEE", "Mech"],
+        "established": 1999,
+        "logo": "V",
+        "tagline": "Chasing heights of innovation.",
+    },
+    {
+        "institution_id": "inst_swec",
+        "name": "Sridevi Women's Engineering College",
+        "short_name": "SWEC",
+        "type": "Engineering",
+        "city": "Hyderabad", "state": "Telangana",
+        "affiliated_university": "JNTUH",
+        "departments": ["CSE", "IT", "ECE", "EEE"],
+        "established": 2001,
+        "logo": "S",
+        "tagline": "Igniting women's excellence.",
+    },
+    {
+        "institution_id": "inst_tkrcet",
+        "name": "TKR College of Engineering & Technology",
+        "short_name": "TKRCET",
+        "type": "Engineering",
+        "city": "Hyderabad", "state": "Telangana",
+        "affiliated_university": "JNTUH",
+        "departments": ["CSE", "IT", "ECE", "EEE", "Mech"],
+        "established": 2002,
+        "logo": "T",
+        "tagline": "Service through education.",
+    },
+    {
+        "institution_id": "inst_mcet",
+        "name": "Methodist College of Engineering & Technology",
+        "short_name": "MCET",
+        "type": "Engineering",
+        "city": "Hyderabad", "state": "Telangana",
+        "affiliated_university": "Osmania University",
+        "departments": ["CSE", "IT", "ECE", "EEE"],
+        "established": 2008,
+        "logo": "M",
+        "tagline": "Nurturing global engineers.",
+    },
+    {
+        "institution_id": "inst_ngit",
+        "name": "Neil Gogte Institute of Technology",
+        "short_name": "NGIT",
+        "type": "Engineering",
+        "city": "Hyderabad", "state": "Telangana",
+        "affiliated_university": "JNTUH",
+        "departments": ["CSE", "IT", "CSE-AIML", "CSE-DS"],
+        "established": 2017,
+        "logo": "N",
+        "tagline": "Redefining engineering education.",
+    },
+    {
+        "institution_id": "inst_kmec",
+        "name": "Keshav Memorial College of Engineering",
+        "short_name": "KMEC",
+        "type": "Engineering",
+        "city": "Hyderabad", "state": "Telangana",
+        "affiliated_university": "JNTUH",
+        "departments": ["CSE", "IT", "CSE-AIML"],
+        "established": 2020,
+        "logo": "K",
+        "tagline": "Engineering with a focus on future tech.",
+    },
+    {
+        "institution_id": "inst_mecs",
+        "name": "Matrusri Engineering College",
+        "short_name": "MECS",
+        "type": "Engineering",
+        "city": "Hyderabad", "state": "Telangana",
+        "affiliated_university": "Osmania University",
+        "departments": ["CSE", "IT", "ECE", "EEE", "Mech"],
+        "established": 2011,
+        "logo": "M",
+        "tagline": "Technical skill, social responsibility.",
+    },
+    {
+        "institution_id": "inst_smec",
+        "name": "St. Martin's Engineering College",
+        "short_name": "SMEC",
+        "type": "Engineering",
+        "city": "Hyderabad", "state": "Telangana",
+        "affiliated_university": "JNTUH",
+        "departments": ["CSE", "IT", "ECE", "EEE", "Mech"],
+        "established": 2002,
+        "logo": "S",
+        "tagline": "Empowering youth.",
+    },
+    {
+        "institution_id": "inst_biet",
+        "name": "Bharat Institute of Engineering & Technology",
+        "short_name": "BIET",
+        "type": "Engineering",
+        "city": "Hyderabad", "state": "Telangana",
+        "affiliated_university": "JNTUH",
+        "departments": ["CSE", "IT", "ECE", "EEE"],
+        "established": 2001,
+        "logo": "B",
+        "tagline": "Excellence in technology.",
+    },
+    {
+        "institution_id": "inst_sit",
+        "name": "Scient Institute of Technology",
+        "short_name": "SIT",
+        "type": "Engineering",
+        "city": "Hyderabad", "state": "Telangana",
+        "affiliated_university": "JNTUH",
+        "departments": ["CSE", "IT", "ECE", "EEE"],
+        "established": 2001,
+        "logo": "S",
+        "tagline": "Commitment to future innovators.",
+    },
+    {
+        "institution_id": "inst_nrec",
+        "name": "Narsimha Reddy Engineering College",
+        "short_name": "NREC",
+        "type": "Engineering",
+        "city": "Hyderabad", "state": "Telangana",
+        "affiliated_university": "JNTUH",
+        "departments": ["CSE", "IT", "ECE", "EEE"],
+        "established": 2007,
+        "logo": "N",
+        "tagline": "Building professional paths.",
+    },
+    {
+        "institution_id": "inst_kprit",
+        "name": "Kommuri Pratap Reddy Institute of Technology",
+        "short_name": "KPRIT",
+        "type": "Engineering",
+        "city": "Hyderabad", "state": "Telangana",
+        "affiliated_university": "JNTUH",
+        "departments": ["CSE", "IT", "ECE", "EEE"],
+        "established": 2008,
+        "logo": "K",
+        "tagline": "Imagine, Innovate, Inspire.",
+    },
+    {
+        "institution_id": "inst_jpnce",
+        "name": "Jayaprakash Narayan College of Engineering",
+        "short_name": "JPNCE",
+        "type": "Engineering",
+        "city": "Mahabubnagar", "state": "Telangana",
+        "affiliated_university": "JNTUH",
+        "departments": ["CSE", "IT", "ECE", "EEE"],
+        "established": 1997,
+        "logo": "J",
+        "tagline": "Education to the rural sector.",
+    },
+    {
+        "institution_id": "inst_mist",
+        "name": "Mahaveer Institute of Science & Technology",
+        "short_name": "MIST",
+        "type": "Engineering",
+        "city": "Hyderabad", "state": "Telangana",
+        "affiliated_university": "JNTUH",
+        "departments": ["CSE", "IT", "ECE", "EEE"],
+        "established": 2001,
+        "logo": "M",
+        "tagline": "Excellence in every endeavor.",
+    },
+    {
+        "institution_id": "inst_vits",
+        "name": "Vignan Institute of Technology & Science",
+        "short_name": "VITS",
+        "type": "Engineering",
+        "city": "Yadadri", "state": "Telangana",
+        "affiliated_university": "JNTUH",
+        "departments": ["CSE", "IT", "ECE", "EEE", "Mech"],
+        "established": 1999,
+        "logo": "V",
+        "tagline": "A vision for quality education.",
+    },
+    {
+        "institution_id": "inst_hitam",
+        "name": "Hyderabad Institute of Technology & Management",
+        "short_name": "HITAM",
+        "type": "Engineering",
+        "city": "Hyderabad", "state": "Telangana",
+        "affiliated_university": "JNTUH",
+        "departments": ["CSE", "IT", "ECE", "EEE"],
+        "established": 2001,
+        "logo": "H",
+        "tagline": "Doing what's right for the student.",
+    },
+    {
+        "institution_id": "inst_sdies",
+        "name": "Sree Dattha Institute of Engineering & Science",
+        "short_name": "SDIES",
+        "type": "Engineering",
+        "city": "Hyderabad", "state": "Telangana",
+        "affiliated_university": "JNTUH",
+        "departments": ["CSE", "IT", "ECE", "EEE"],
+        "established": 2001,
+        "logo": "S",
+        "tagline": "Empowering generations.",
+    },
+    {
+        "institution_id": "inst_tpce",
+        "name": "Talla Padmavathi College of Engineering",
+        "short_name": "TPCE",
+        "type": "Engineering",
+        "city": "Warangal", "state": "Telangana",
+        "affiliated_university": "JNTUH",
+        "departments": ["CSE", "IT", "ECE", "EEE"],
+        "established": 2008,
+        "logo": "T",
+        "tagline": "Education that transcends boundaries.",
+    },
+    {
+        "institution_id": "inst_jits",
+        "name": "Jyothishmathi Institute of Technology & Science",
+        "short_name": "JITS",
+        "type": "Engineering",
+        "city": "Karimnagar", "state": "Telangana",
+        "affiliated_university": "JNTUH",
+        "departments": ["CSE", "IT", "ECE", "EEE"],
+        "established": 1997,
+        "logo": "J",
+        "tagline": "A beacon of light.",
+    },
+    {
+        "institution_id": "inst_scet",
+        "name": "Samskruti College of Engineering & Technology",
+        "short_name": "SCET",
+        "type": "Engineering",
+        "city": "Hyderabad", "state": "Telangana",
+        "affiliated_university": "JNTUH",
+        "departments": ["CSE", "IT", "ECE", "EEE"],
+        "established": 2005,
+        "logo": "S",
+        "tagline": "Quality in engineering values.",
+    },
+    {
+        "institution_id": "inst_sidd",
+        "name": "Siddharth Institute of Engineering & Technology",
+        "short_name": "SIET",
+        "type": "Engineering",
+        "city": "Hyderabad", "state": "Telangana",
+        "affiliated_university": "JNTUH",
+        "departments": ["CSE", "IT", "ECE", "EEE"],
+        "established": 2001,
+        "logo": "S",
+        "tagline": "In search of technical perfection.",
+    },
+    {
+        "institution_id": "inst_vcet",
+        "name": "Visvesvaraya College of Engineering & Technology",
+        "short_name": "VCET",
+        "type": "Engineering",
+        "city": "Hyderabad", "state": "Telangana",
+        "affiliated_university": "JNTUH",
+        "departments": ["CSE", "IT", "ECE", "EEE"],
+        "established": 2007,
+        "logo": "V",
+        "tagline": "Engineering for sustainable future.",
+    },
+    {
+        "institution_id": "inst_sicet",
+        "name": "Sri Indu College of Engineering & Technology",
+        "short_name": "SICET",
+        "type": "Engineering",
+        "city": "Hyderabad", "state": "Telangana",
+        "affiliated_university": "JNTUH",
+        "departments": ["CSE", "IT", "ECE", "EEE"],
+        "established": 2001,
+        "logo": "S",
+        "tagline": "Pioneering technical education.",
+    },
+    {
+        "institution_id": "inst_kits",
+        "name": "Kakatiya Institute of Technology & Science",
+        "short_name": "KITS",
+        "type": "Engineering",
+        "city": "Warangal", "state": "Telangana",
+        "affiliated_university": "Kakatiya University",
+        "departments": ["CSE", "IT", "ECE", "EEE", "Mech"],
+        "established": 1980,
+        "logo": "K",
+        "tagline": "Strive for perfection.",
+    },
+    {
+        "institution_id": "inst_nmrec",
+        "name": "Nalla Malla Reddy Engineering College",
+        "short_name": "NMREC",
+        "type": "Engineering",
+        "city": "Hyderabad", "state": "Telangana",
+        "affiliated_university": "JNTUH",
+        "departments": ["CSE", "IT", "ECE", "EEE"],
+        "established": 2001,
+        "logo": "N",
+        "tagline": "Complete education.",
+    },
+    {
+        "institution_id": "inst_liet",
+        "name": "Lords Institute of Engineering & Technology",
+        "short_name": "LIET",
+        "type": "Engineering",
+        "city": "Hyderabad", "state": "Telangana",
+        "affiliated_university": "JNTUH",
+        "departments": ["CSE", "IT", "ECE", "EEE"],
+        "established": 2002,
+        "logo": "L",
+        "tagline": "Gateway to success.",
+    },
+    {
+        "institution_id": "inst_scets",
+        "name": "Shadan College of Engineering & Technology",
+        "short_name": "SCET-S",
+        "type": "Engineering",
+        "city": "Hyderabad", "state": "Telangana",
+        "affiliated_university": "JNTUH",
+        "departments": ["CSE", "IT", "ECE", "EEE"],
+        "established": 1995,
+        "logo": "S",
+        "tagline": "Excellence in engineering diversity.",
+    },
+    {
         "institution_id": "inst_iimb",
         "name": "Loyola Institute of Management",
         "short_name": "LIM",
@@ -213,7 +729,7 @@ INSTITUTIONS = [
     },
     {
         "institution_id": "inst_diploma",
-        "name": "Government Polytechnic â€” Masab Tank",
+        "name": "Government Polytechnic — Masab Tank",
         "short_name": "GPT-MT",
         "type": "Diploma",
         "city": "Hyderabad", "state": "Telangana",
@@ -221,7 +737,7 @@ INSTITUTIONS = [
         "departments": ["Mechanical", "Civil", "EEE", "Computer Engg"],
         "established": 1958,
         "logo": "G",
-        "tagline": "Skilled diploma â†’ industry pipeline.",
+        "tagline": "Skilled diploma → industry pipeline.",
     },
 ]
 
@@ -296,6 +812,31 @@ def seed_payload() -> dict:
     """Return all documents to insert into a fresh DB."""
     random.seed(7)
     now = datetime.now(timezone.utc)
+
+    # Programmatically expand recruiters list to 500+ items
+    local_recruiters = list(RECRUITERS)
+    comp_prefixes = ["Apex", "Innova", "Quantum", "Nexus", "Stellar", "Vector", "Optima", "Synergy", "Zenith", "Alpha", "Beta", "Gamma", "Delta", "Sigma", "Omega", "Cognitive", "Digital", "Cloud", "Cyber", "Data", "Tech", "Systems", "Core", "Global", "Intel", "Logix", "Matrix", "Nova", "Omni", "Prism", "Quasar", "Radiant", "Vertex", "Web", "Zero"]
+    comp_suffixes = ["Technologies", "Solutions", "Systems", "Software", "Labs", "Analytics", "Intelligence", "Dynamics", "Networks", "Consulting", "Group", "Digital", "Tech", "Partners", "Global", "Enterprises", "Industries", "Ventures", "Services", "Designs", "Innovations"]
+    industries = ["Software / Cloud", "Enterprise SaaS", "Investment Banking", "Consulting", "IT Services", "Pharma Analytics", "Retail Tech", "Quantitative Finance", "FinTech SaaS", "Networking", "Semiconductors / AI", "Database / Cloud", "Cybersecurity", "HealthTech", "AdTech", "EdTech", "CleanTech", "Logistics", "E-commerce"]
+    types = ["Product", "Services", "Finance", "Consulting"]
+    logo_colors = ["#FF5733", "#33FF57", "#3357FF", "#F3FF33", "#FF33F3", "#33FFF0", "#FFAF33", "#AF33FF", "#33FFAF", "#FF3333", "#33FF33", "#3333FF", "#E91E63", "#9C27B0", "#673AB7", "#3F51B5", "#00BCD4", "#009688", "#4CAF50", "#FFEB3B", "#FF9800", "#FF5722", "#795548", "#607D8B"]
+    
+    generated_names = set(r["name"] for r in local_recruiters)
+    while len(local_recruiters) < 520:
+        pref = random.choice(comp_prefixes)
+        suff = random.choice(comp_suffixes)
+        name = f"{pref} {suff}"
+        if name not in generated_names:
+            generated_names.add(name)
+            rec_type = random.choice(types)
+            local_recruiters.append({
+                "name": name,
+                "industry": random.choice(industries),
+                "type": rec_type,
+                "headcount": random.randint(100, 100000),
+                "logo_color": random.choice(logo_colors),
+            })
+
     docs = {
         "institutions": [], "departments": [], "students": [], "recruiters": [],
         "jobs": [], "applications": [], "dsa_questions": [], "dsa_progress": [], "dsa_question_progress": [], "aptitude_scores": [],
@@ -338,7 +879,7 @@ def seed_payload() -> dict:
     # Add synthetic placement records for other institutions so dashboards look populated
     for inst in INSTITUTIONS[1:]:
         for yr in ("2024-25", "2025-26"):
-            for company in random.sample([r["name"] for r in RECRUITERS], k=7):
+            for company in random.sample([r["name"] for r in local_recruiters], k=7):
                 docs["placement_records"].append({
                     "record_id": f"pr_{uuid.uuid4().hex[:10]}",
                     "institution_id": inst["institution_id"],
@@ -364,7 +905,7 @@ def seed_payload() -> dict:
             })
 
     # -- Recruiters --
-    for r in RECRUITERS:
+    for r in local_recruiters:
         docs["recruiters"].append({
             "recruiter_id": "rec_" + r["name"].lower().replace(" ", "_"),
             **r,
@@ -376,7 +917,7 @@ def seed_payload() -> dict:
         })
 
     # -- Jobs / Drives (open & closed) --
-    for r in RECRUITERS:
+    for r in local_recruiters:
         for _ in range(random.randint(2, 4)):
             jt = random.choice(JOB_TITLES_BY_TYPE.get(r["type"], JOB_TITLES_BY_TYPE["Services"]))
             docs["jobs"].append({
@@ -398,7 +939,7 @@ def seed_payload() -> dict:
     # -- Students (across institutions) --
     student_pool = []
     for inst in INSTITUTIONS:
-        per_inst = {"Engineering": 220, "Management": 60, "Pharmacy": 40, "Medical": 30, "Degree": 70, "Diploma": 50}[inst["type"]]
+        per_inst = {"Engineering": 100, "Management": 80, "Pharmacy": 60, "Medical": 50, "Degree": 90, "Diploma": 70}[inst["type"]]
         depts = inst["departments"]
         for i in range(per_inst):
             dept = random.choice(depts)
@@ -443,7 +984,18 @@ def seed_payload() -> dict:
             student_pool.append(stu)
 
     # -- DSA progress (Striver A2Z) for engineering students --
-    eng_students = [s for s in student_pool if s["institution_id"] in ("inst_kmit", "inst_vnr", "inst_vce", "inst_cbit", "inst_cvr", "inst_mgit", "inst_mvsrec", "inst_bvrit")]
+    core_ids = {"inst_kmit", "inst_vnr", "inst_vce", "inst_cbit", "inst_cvr", "inst_mgit", "inst_mvsrec", "inst_bvrit"}
+    students_by_inst = {}
+    for s in student_pool:
+        students_by_inst.setdefault(s["institution_id"], []).append(s)
+        
+    eng_students = []
+    for inst in INSTITUTIONS:
+        inst_students = students_by_inst.get(inst["institution_id"], [])
+        if inst["institution_id"] in core_ids:
+            eng_students.extend(inst_students)
+        elif inst["type"] == "Engineering":
+            eng_students.extend(random.sample(inst_students, k=min(10, len(inst_students))))
     for s in eng_students:
         # Higher CGPA â†’ higher solve rate
         skill_factor = (s["cgpa"] - 6.0) / 4.0  # 0.1 â†’ 0.95
@@ -575,9 +1127,13 @@ def seed_payload() -> dict:
             })
 
     # -- Training programs / cohorts --
-    for inst in INSTITUTIONS[:3]:
+    for inst in INSTITUTIONS:
         for prog in PROGRAMS:
             if prog["stream"] in ("All", inst["type"], "Engineering" if inst["type"] == "Engineering" else "Management"):
+                enrolled = random.randint(60, 200)
+                seats_purchased = enrolled + random.randint(20, 80)
+                budget_allocation = seats_purchased * 3500
+                budget_spent = enrolled * 3500
                 docs["training_programs"].append({
                     "cohort_id": f"ch_{inst['institution_id']}_{prog['code']}",
                     "institution_id": inst["institution_id"],
@@ -587,9 +1143,14 @@ def seed_payload() -> dict:
                     "start_date": (now - timedelta(days=120)).isoformat(),
                     "end_date": (now + timedelta(weeks=prog["duration_weeks"])).isoformat(),
                     "modules_total": prog["modules"],
-                    "enrolled_count": random.randint(60, 200),
+                    "enrolled_count": enrolled,
                     "completion_pct": round(random.uniform(40, 92), 1),
                     "instructor": _name(),
+                    "seats_purchased": seats_purchased,
+                    "seats_used": enrolled,
+                    "seats_remaining": seats_purchased - enrolled,
+                    "budget_allocation": budget_allocation,
+                    "budget_spent": budget_spent,
                 })
 
     # -- Enrollments (per student) --

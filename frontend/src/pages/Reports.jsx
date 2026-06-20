@@ -52,6 +52,19 @@ export default function Reports() {
           <p className="font-serif text-lg text-bone-100/70 mt-5 max-w-2xl">
             Every export answers a leadership question: risk, forecast, cohort action, recruiter movement, and audit trace.
           </p>
+          <button
+            onClick={async () => {
+              try {
+                await api.post("/digest/send", {});
+                alert("Periodic Digest report compiled and dispatched successfully.");
+              } catch (e) {
+                alert("Failed to send periodic digest: " + (e.response?.data?.detail || e.message));
+              }
+            }}
+            className="mt-6 btn bg-bone-100 text-ink-900 border-bone-100 hover:bg-accent hover:border-accent hover:text-white"
+          >
+            Send Periodic Digest
+          </button>
         </div>
 
         <div className="col-span-12 lg:col-span-4 editorial p-8 bg-bone-50" data-testid="board-packet">

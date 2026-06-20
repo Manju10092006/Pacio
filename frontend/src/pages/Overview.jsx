@@ -7,6 +7,7 @@ import { AlertTriangle, ArrowUpRight, CheckCircle2 } from "lucide-react";
 import VoiceSummary from "../components/VoiceSummary";
 import HealthBreakdown from "../components/HealthBreakdown";
 import HighRiskStudents from "../components/HighRiskStudents";
+import AICopilot from "../components/AICopilot";
 
 const num = (value, decimals = 0) => {
   if (value === null || value === undefined || value === "") return "0";
@@ -157,6 +158,8 @@ export default function Overview() {
         </div>
         <p className="font-serif text-xl text-ink-600 mt-4 leading-relaxed max-w-4xl">{execNarration}</p>
       </div>
+
+      <AICopilot surface="overview-dashboard" />
 
       <div className="grid grid-cols-12 gap-3" data-testid="kpi-grid">
         {kpis.map((k, i) => {

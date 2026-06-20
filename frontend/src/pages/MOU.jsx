@@ -73,6 +73,32 @@ export default function MOU() {
             </a>
           )}
           <div className="hairline my-6 border-bone-100/30" />
+          <div className="font-mono text-[10px] tracking-[0.24em] text-bone-100/60">E-SIGN STATUS</div>
+          <div className="font-serif text-sm mt-2 text-bone-50">
+            {mou?.esign_status === "signed" ? (
+              <span className="text-emerald-400 font-bold block">✓ E-Signed by {mou?.esign_by} on {mou?.esign_at?.slice(0, 10)}</span>
+            ) : (
+              <div className="mt-1">
+                <span className="text-amber-400 block font-bold">Pending Signatures</span>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      await api.post("/mou/esign", {});
+                      toast.success("MOU E-Signed successfully!");
+                      load();
+                    } catch (err) {
+                      toast.error("E-Sign failed");
+                    }
+                  }}
+                  className="mt-2 btn w-full bg-accent border-accent text-bone-100 hover:bg-accent/80 justify-center py-1.5"
+                >
+                  E-Sign MOU Now
+                </button>
+              </div>
+            )}
+          </div>
+          <div className="hairline my-6 border-bone-100/30" />
           <div className="font-mono text-[10px] tracking-[0.24em] text-bone-100/60">PAYOUT</div>
           <div className="font-serif text-lg mt-2 text-bone-50">{mou?.payout_status || "—"}</div>
         </div>

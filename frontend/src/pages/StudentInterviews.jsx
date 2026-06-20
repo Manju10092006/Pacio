@@ -68,6 +68,7 @@ export default function StudentInterviews() {
 
   const startInterview = async () => {
     if (mode === "avatar") {
+      await ensureMedia().catch(() => null);
       setSession({
         session_id: "avatar_session",
         questions: []
@@ -203,7 +204,7 @@ export default function StudentInterviews() {
               </div>
               <div className="flex-1 border border-line bg-ink overflow-hidden min-h-[500px]">
                 <iframe
-                  src="https://embed.liveavatar.com/v1/6bb399fb-fc3c-4e1a-893e-5c4a2de11988?orientation=horizontal"
+                  src="https://embed.liveavatar.com/v1/13943121-d0b6-44f1-abbf-14871d7911ca?orientation=horizontal"
                   allow="camera; microphone; display-capture"
                   className="w-full h-full min-h-[500px]"
                   title="LiveAvatar Mock Interview"

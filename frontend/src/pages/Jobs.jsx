@@ -50,7 +50,7 @@ export default function Jobs() {
   const loadSavedJobsIndex = async () => {
     try {
       const { data } = await api.get("/saved-jobs");
-      setSavedIds(new Set((data || []).map((j) => j.job_id)));
+      setSavedIds(new Set((data.items || data || []).map((j) => j.job_id)));
     } catch (e) {
       console.warn("Failed to load saved jobs index", e);
     }
@@ -93,7 +93,7 @@ export default function Jobs() {
         salary: job.salary || "Not specified",
         jobType: job.type || "Full-time",
         logo: job.logo || "",
-        url: job.link || "",
+        url: job.link || job.url || job.applyLink || "",
       };
       await api.post("/saved-jobs", payload);
       toast.success("Opportunity bookmarked!");
@@ -351,8 +351,11 @@ export default function Jobs() {
                     <div>
                       <div className="flex items-start justify-between gap-4">
                         <div>
-                          <div className="font-mono text-[10px] tracking-[0.24em] text-ink-400">
-                            {job.company || "COMPANY"}
+                          <div className="flex items-center gap-2">
+                            {job.logo && <img src={job.logo} alt="" className="h-7 w-7 object-contain border border-line bg-bone-50 p-1" />}
+                            <div className="font-mono text-[10px] tracking-[0.24em] text-ink-400">
+                              {job.company || "COMPANY"}
+                            </div>
                           </div>
                           <h4 className="font-display text-xl tracking-tight mt-1">
                             {job.title}
@@ -386,9 +389,9 @@ export default function Jobs() {
                         <Bookmark size={10} /> {isSaved ? "SAVED" : "SAVE JOB"}
                       </button>
                       
-                      {job.link && (
+                      {(job.link || job.url || job.applyLink) && (
                         <a
-                          href={job.link}
+                          href={job.link || job.url || job.applyLink}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="inline-flex items-center gap-1 text-[10px] font-mono tracking-wider text-ink-400 hover:text-accent transition-colors"

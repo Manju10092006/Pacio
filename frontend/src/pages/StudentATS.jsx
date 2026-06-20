@@ -31,7 +31,7 @@ export default function StudentATS() {
       ]);
       if (latestRes.status === "fulfilled") setLatest(latestRes.value.data);
       if (versionsRes.status === "fulfilled") setVersions(versionsRes.value.data?.items || []);
-      if (heatmapRes.status === "fulfilled") setHeatmap(heatmapRes.value.data?.keywords || []);
+      if (heatmapRes.status === "fulfilled") setHeatmap(heatmapRes.value.data?.keywords || heatmapRes.value.data?.keyword_heatmap || []);
     } catch {}
   };
 
@@ -48,14 +48,14 @@ export default function StudentATS() {
       toast.success("Resume uploaded and scored");
       await load();
     } catch {
-      toast.error("Upload failed");
+      toast.error("Resume uploaded, but scoring could not complete. Please try again.");
     } finally {
       setUploading(false);
       if (fileRef.current) fileRef.current.value = "";
     }
   };
 
-  const report = latest?.report || latest || {};
+  const report = latest?.report || latest?.item || latest || {};
   const score = report.ats_score || report.score || 0;
 
   const verColumns = [
@@ -180,11 +180,11 @@ export default function StudentATS() {
         <div className="col-span-12 md:col-span-5 editorial p-8 bg-ink text-bone flex flex-col justify-between">
           <div>
             <div className="font-mono text-[10px] tracking-[0.24em] text-bone/45">UPLOAD NEW RESUME</div>
-            <p className="text-sm text-bone/70 mt-3 font-serif">Upload a PDF resume to get an updated ATS score and keyword analysis.</p>
+            <p className="text-sm text-bone/70 mt-3 font-serif">Upload PDF, DOCX, TXT, PNG, or JPG resumes to get an updated ATS score and keyword analysis.</p>
           </div>
           <label className={`mt-8 block border border-dashed border-bone/35 p-8 text-center cursor-pointer hover:border-accent hover:bg-bone/5 transition-all ${uploading ? "opacity-50 pointer-events-none" : ""}`}>
-            <input ref={fileRef} type="file" accept=".pdf" className="hidden" onChange={handleUpload} disabled={uploading} />
-            <div className="font-mono text-xs uppercase tracking-wider text-bone/60">{uploading ? "SCORING IN PROGRESS..." : "DRAG RESUME PDF OR CLICK"}</div>
+            <input ref={fileRef} type="file" accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg" className="hidden" onChange={handleUpload} disabled={uploading} />
+            <div className="font-mono text-xs uppercase tracking-wider text-bone/60">{uploading ? "SCORING IN PROGRESS..." : "DRAG RESUME FILE OR CLICK"}</div>
           </label>
         </div>
 

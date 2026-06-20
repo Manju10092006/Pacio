@@ -7,6 +7,7 @@ import { Briefcase, ChevronRight, Compass, Sparkles } from "lucide-react";
 export default function StudentCareer() {
   useAuth();
   const [recs, setRecs] = useState([]);
+  const [selected, setSelected] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -16,18 +17,25 @@ export default function StudentCareer() {
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) return <div className="font-mono text-xs text-ink-400 p-8">LOADING…</div>;
+  if (loading) return <div className="font-mono text-xs text-ink-400 p-8">LOADING...</div>;
+
+  const activePath = selected || recs[0];
+  const roadmap = [
+    { label: "Foundation", detail: "Lock CS fundamentals, aptitude accuracy, communication, and a clean ATS resume." },
+    { label: "Proof", detail: "Ship two role-aligned projects with measurable outcomes and recruiter-readable stories." },
+    { label: "Interview", detail: "Practice DSA, HR stories, and role-specific technical rounds inside CareerOS." },
+    { label: "Apply", detail: "Use matching jobs, saved roles, and application tracking to move from shortlist to offer." },
+  ];
 
   return (
     <div className="space-y-10">
-      {/* Header */}
       <div>
-        <div className="font-mono text-[10px] tracking-[0.28em] text-ink-400">§ CAREER PATHS</div>
+        <div className="font-mono text-[10px] tracking-[0.28em] text-ink-400">CAREER PATHS</div>
         <h1 className="font-display text-5xl md:text-6xl tracking-tightest mt-3" data-testid="career-heading">
           Career <span className="text-accent">Pathways</span>
         </h1>
         <p className="font-serif text-lg text-ink-500 mt-2 max-w-xl">
-          AI-powered career recommendations based on your academic performance, DSA mastery, and aptitude scores.
+          AI-powered career recommendations based on your academic performance, DSA mastery, aptitude, ATS, and interview readiness.
         </p>
       </div>
 
@@ -35,12 +43,12 @@ export default function StudentCareer() {
         {recs.map((r, i) => (
           <div
             key={r.role}
-            className="col-span-12 md:col-span-6 lg:col-span-4 editorial p-8 flex flex-col justify-between"
+            className={`col-span-12 md:col-span-6 lg:col-span-4 editorial p-8 flex flex-col justify-between transition-colors ${activePath?.role === r.role ? "border-ink-900" : ""}`}
             data-testid={`career-card-${i}`}
           >
             <div>
               <div className="flex items-center justify-between">
-                <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full text-xs font-mono bg-bone-100 text-ink-700">
+                <div className="inline-flex items-center gap-2 px-2.5 py-0.5 text-xs font-mono bg-bone-100 text-ink-700">
                   <Briefcase size={12} /> {r.fit_percentage}% FIT
                 </div>
                 <Sparkles size={16} className="text-accent" />
@@ -54,7 +62,7 @@ export default function StudentCareer() {
               <div className="space-y-3">
                 <div className="font-mono text-[10px] tracking-[0.18em] text-ink-400">RECOMMENDED ACTIONS</div>
                 <ul className="space-y-2">
-                  {r.actions.map((act, actIdx) => (
+                  {(r.actions || []).map((act, actIdx) => (
                     <li key={actIdx} className="flex items-start gap-2 text-xs text-ink-700">
                       <ChevronRight size={14} className="text-accent mt-0.5 flex-shrink-0" />
                       <span>{act}</span>
@@ -65,13 +73,47 @@ export default function StudentCareer() {
             </div>
 
             <div className="mt-8">
-              <Link to="/student/jobs" className="btn w-full text-xs py-2.5 flex items-center justify-center gap-2">
-                Explore Pathways <Compass size={14} />
-              </Link>
+              <button onClick={() => setSelected(r)} className="btn w-full text-xs py-2.5 flex items-center justify-center gap-2">
+                Explore Pathway <Compass size={14} />
+              </button>
             </div>
           </div>
         ))}
       </div>
+
+      {activePath && (
+        <div className="editorial p-8 bg-paper" data-testid="career-pathway-detail">
+          <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-8">
+            <div className="max-w-2xl">
+              <div className="font-mono text-[10px] tracking-[0.24em] text-ink-400">ACTIVE PATHWAY</div>
+              <h2 className="font-display text-4xl tracking-tightest mt-2">{activePath.role}</h2>
+              <p className="font-serif text-ink-600 mt-3">{activePath.reason}</p>
+              <div className="mt-5 flex flex-wrap gap-2">
+                {(activePath.skills || ["DSA", "Projects", "Resume", "Communication", "Interview readiness"]).map((skill) => (
+                  <span key={skill} className="border border-line bg-bone-50 px-3 py-1 font-mono text-[10px] tracking-[0.18em] text-ink-600">
+                    {skill.toUpperCase()}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <div className="bg-ink text-bone p-6 min-w-[220px]">
+              <div className="font-mono text-[10px] tracking-[0.24em] text-bone/45">ROLE FIT</div>
+              <div className="font-display text-6xl text-accent tnum mt-2">{activePath.fit_percentage}%</div>
+              <Link to="/student/jobs" className="btn mt-5 w-full justify-center text-xs py-2">Find matching jobs</Link>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-12 gap-3 mt-8">
+            {roadmap.map((step, idx) => (
+              <div key={step.label} className="col-span-12 md:col-span-3 border border-line bg-bone-50 p-5">
+                <div className="font-display text-3xl text-accent tnum">0{idx + 1}</div>
+                <div className="font-display text-lg tracking-tight mt-2">{step.label}</div>
+                <div className="font-serif text-sm text-ink-500 mt-1">{step.detail}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

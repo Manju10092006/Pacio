@@ -42,7 +42,8 @@ export default function StudentHome() {
       
       renderCertificateToCanvas(canvas, certData);
     }
-  }, [showCertificate, selectedCertType, d]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showCertificate, selectedCertType, d, s]);
 
   const downloadPNG = () => {
     if (!canvasRef.current) return;

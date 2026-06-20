@@ -66,27 +66,27 @@ export default function PlatformSummary({ stats, insts = [] }) {
         <p className="font-serif text-xl text-ink-600 mt-4 leading-relaxed">{narration}</p>
       </div>
 
-      <div className="col-span-12 lg:col-span-4 editorial p-8 bg-ink-900 text-bone-100">
-        <div className="font-mono text-[10px] tracking-[0.24em] text-bone-100/40">AI RISK RADAR / THIS MONTH</div>
+      <div className="col-span-12 lg:col-span-4 editorial p-8">
+        <div className="font-mono text-[10px] tracking-[0.24em] text-ink-400">AI RISK RADAR / THIS MONTH</div>
         <div className="mt-4 space-y-3">
           {radar.map((r, i) => {
             const inner = (
               <>
-                <div className="flex items-center gap-2 font-mono text-[9px] tracking-[0.18em] uppercase text-bone-100/40">
-                  <AlertTriangle size={11} className={r.severity === "high" ? "text-accent" : "text-bone-100/40"} />
+                <div className="flex items-center gap-2 font-mono text-[9px] tracking-[0.18em] uppercase text-ink-400">
+                  <AlertTriangle size={11} className="text-accent" />
                   {r.severity}
                 </div>
-                <div className="font-display text-base tracking-tight mt-1">{r.title}</div>
-                <div className="text-xs text-bone-100/60 mt-0.5">{r.body}</div>
+                <div className="font-display text-base tracking-tight mt-1 text-ink-900">{r.title}</div>
+                <div className="text-xs text-ink-500 mt-0.5">{r.body}</div>
               </>
             );
             return r.to ? (
-              <Link key={i} to={r.to} className="block border-b border-bone-100/10 pb-3 last:border-0 hover:opacity-80 transition-opacity">{inner}</Link>
+              <Link key={i} to={r.to} className="block border-b border-line pb-3 last:border-0 hover:bg-bone-50 transition-colors">{inner}</Link>
             ) : (
-              <div key={i} className="border-b border-bone-100/10 pb-3 last:border-0">{inner}</div>
+              <div key={i} className="border-b border-line pb-3 last:border-0">{inner}</div>
             );
           })}
-          {radar.length === 0 && <div className="text-sm text-bone-100/50">No active risks. Platform is healthy.</div>}
+          {radar.length === 0 && <div className="text-sm text-ink-400">No active risks. Platform is healthy.</div>}
         </div>
       </div>
     </section>

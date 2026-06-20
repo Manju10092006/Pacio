@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { useAuth } from "../App";
 import { Briefcase, ChevronRight, Compass, Sparkles } from "lucide-react";
@@ -64,9 +65,9 @@ export default function StudentCareer() {
             </div>
 
             <div className="mt-8">
-              <button className="btn w-full text-xs py-2.5 flex items-center justify-center gap-2">
+              <Link to="/student/jobs" className="btn w-full text-xs py-2.5 flex items-center justify-center gap-2">
                 Explore Pathways <Compass size={14} />
-              </button>
+              </Link>
             </div>
           </div>
         ))}

@@ -1099,6 +1099,14 @@ async def _startup():
             except Exception as e:
                 log.warning("Skipping user %s: %s", d["email"], e)
         else:
+            # Reconcile core scope fields so demo accounts always resolve to their seeded
+            # institution/department (fixes stale accounts that show empty rosters/zeros).
+            await db.users.update_one({"email": d["email"]}, {"$set": {
+                "role": d["role"],
+                "institution_id": d.get("institution_id"),
+                "department": d.get("department"),
+                "approved": d.get("approved", True),
+            }})
             # Refresh password if missing or admin-password-changed
             if not existing.get("password_hash"):
                 pw = ADMIN_PASSWORD if d["role"] == "super_admin" else DEFAULT_DEMO_PASSWORD

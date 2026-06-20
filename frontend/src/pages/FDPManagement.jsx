@@ -3,6 +3,7 @@ import { api } from "../lib/api";
 import { useAuth } from "../App";
 import { toast } from "sonner";
 import { Plus, X, Users, Calendar, CheckCircle } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 
 const emptyForm = { topic: "", date: "", duration_hours: 1, faculty_emails: "" };
 
@@ -106,6 +107,48 @@ export default function FDPManagement() {
           </div>
         ))}
       </div>
+
+      {/* FDP Analytics Visuals */}
+      {totalSessions > 0 && (
+        <div className="grid grid-cols-12 gap-3 border border-line bg-bone-50 p-6" data-testid="fdp-analytics">
+          <div className="col-span-12 md:col-span-8 h-64">
+            <div className="font-mono text-[10px] tracking-[0.24em] text-ink-400 mb-4">ATTENDANCE TREND PER SESSION</div>
+            <div className="w-full h-48">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={sessions}>
+                  <XAxis dataKey="topic" stroke="#0a0a0a" fontSize={10} tickLine={false} />
+                  <YAxis stroke="#0a0a0a" fontSize={10} tickLine={false} domain={[0, 100]} />
+                  <Tooltip contentStyle={{ background: "#F4F0E8", border: "1px solid #0a0a0a" }} />
+                  <Bar dataKey="attendance_pct" name="Attendance %" fill="#c1440e" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+          <div className="col-span-12 md:col-span-4 flex flex-col justify-between p-4 bg-bone-100/50 border border-line/60">
+            <div>
+              <div className="font-mono text-[9px] tracking-widest text-ink-400">FACULTY ENGAGEMENT</div>
+              <h4 className="font-display text-xl mt-1 tracking-tight font-bold">Hours & Participation</h4>
+              <div className="space-y-4 mt-6">
+                <div>
+                  <div className="text-xs text-ink-500 font-serif">Total Training Delivered</div>
+                  <div className="font-display text-3xl font-bold tnum mt-0.5">
+                    {sessions.reduce((a, s) => a + (s.duration_hours || 0), 0)} hrs
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs text-ink-500 font-serif">Average Duration per Session</div>
+                  <div className="font-display text-xl font-bold tnum mt-0.5">
+                    {(sessions.reduce((a, s) => a + (s.duration_hours || 0), 0) / Math.max(1, totalSessions)).toFixed(1)} hrs
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="font-mono text-[9px] text-ink-400 pt-3 border-t border-line/30">
+              Computed from live registry logs
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Schedule form */}
       {open && (

@@ -68,12 +68,55 @@ export default function RoleLayout({ label, role, accent, sections }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [open, setOpen] = useState(false);
+  const [cmdOpen, setCmdOpen] = useState(false);
+  const [cmdQuery, setCmdQuery] = useState("");
+  const [selectedIndex, setSelectedIndex] = useState(0);
+
+  const allItems = sections.flatMap((s) => s.items);
+  const filteredItems = allItems.filter((item) =>
+    item.label.toLowerCase().includes(cmdQuery.toLowerCase())
+  );
 
   useEffect(() => { setOpen(false); }, [location.pathname]);
   useEffect(() => {
-    document.body.style.overflow = open ? "hidden" : "";
+    document.body.style.overflow = (open || cmdOpen) ? "hidden" : "";
     return () => { document.body.style.overflow = ""; };
-  }, [open]);
+  }, [open, cmdOpen]);
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        setCmdOpen((o) => !o);
+        setCmdQuery("");
+        setSelectedIndex(0);
+      } else if (e.key === "Escape") {
+        setCmdOpen(false);
+      } else if (cmdOpen) {
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          setSelectedIndex((prev) => (prev + 1) % Math.max(1, filteredItems.length));
+        } else if (e.key === "ArrowUp") {
+          e.preventDefault();
+          setSelectedIndex((prev) => (prev - 1 + filteredItems.length) % Math.max(1, filteredItems.length));
+        } else if (e.key === "Enter") {
+          e.preventDefault();
+          if (filteredItems[selectedIndex]) {
+            navigate(filteredItems[selectedIndex].to);
+            setCmdOpen(false);
+          }
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [cmdOpen, filteredItems, navigate, selectedIndex]);
+
+  useEffect(() => {
+    if (cmdOpen) {
+      setSelectedIndex(0);
+    }
+  }, [cmdQuery, cmdOpen]);
 
   const logout = async () => {
     await api.post("/auth/logout").catch(() => {});
@@ -99,6 +142,62 @@ export default function RoleLayout({ label, role, accent, sections }) {
         </>
       )}
 
+      {/* COMMAND PALETTE */}
+      {cmdOpen && (
+        <div 
+          className="fixed inset-0 bg-ink-900/60 backdrop-blur-sm z-50 flex items-start justify-center pt-24 px-4"
+          onClick={() => setCmdOpen(false)}
+        >
+          <div 
+            className="bg-bone-50 border border-line w-full max-w-lg shadow-2xl overflow-hidden animate-[fadein_.15s_ease-out]"
+            onClick={(e) => e.stopPropagation()}
+            data-testid="command-palette"
+          >
+            <div className="p-4 border-b border-line flex items-center gap-3">
+              <span className="font-mono text-xs text-ink-400">SEARCH</span>
+              <input
+                type="text"
+                autoFocus
+                placeholder="Type a page name to navigate..."
+                value={cmdQuery}
+                onChange={(e) => setCmdQuery(e.target.value)}
+                className="w-full bg-transparent focus:outline-none font-sans text-sm text-ink-900"
+              />
+              <span className="font-mono text-[9px] border border-line px-1.5 py-0.5 text-ink-400">ESC</span>
+            </div>
+            
+            <div className="max-h-[300px] overflow-y-auto divide-y divide-line/30 font-mono text-xs">
+              {filteredItems.map((item, idx) => {
+                const Icon = item.icon;
+                const active = idx === selectedIndex;
+                return (
+                  <div
+                    key={item.to}
+                    onClick={() => {
+                      navigate(item.to);
+                      setCmdOpen(false);
+                    }}
+                    className={`flex items-center justify-between px-4 py-3.5 cursor-pointer transition-all ${
+                      active ? "bg-accent/10 border-l-4" : "hover:bg-bone-100/50"
+                    }`}
+                    style={active ? { borderLeftColor: accent } : {}}
+                  >
+                    <div className="flex items-center gap-3">
+                      {Icon && <Icon size={14} className={active ? "text-accent" : "text-ink-400"} />}
+                      <span className={active ? "font-bold text-accent" : "text-ink-700"}>{item.label}</span>
+                    </div>
+                    {active && <span className="text-[10px] text-accent/70 tracking-widest font-sans font-bold">ENTER ↵</span>}
+                  </div>
+                );
+              })}
+              {filteredItems.length === 0 && (
+                <div className="p-8 text-center text-ink-400 font-serif">No matching pages found.</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       <main className="flex-1 min-w-0 relative">
         <header className="h-12 border-b border-line bg-bone-50 flex items-center justify-between px-4 lg:px-8 sticky top-0 z-30 glass">
           <div className="flex items-center gap-3">
@@ -114,6 +213,13 @@ export default function RoleLayout({ label, role, accent, sections }) {
             </div>
           </div>
           <div className="flex items-center gap-4">
+            <button 
+              onClick={() => setCmdOpen(true)}
+              className="hidden md:inline-flex items-center gap-1.5 text-xs font-mono border border-line px-2 py-1 bg-bone-100 hover:border-accent hover:text-accent transition-colors"
+            >
+              <span>Search</span>
+              <span className="border-l border-line-strong pl-1.5 text-ink-400">⌘K</span>
+            </button>
             <span className="pill hidden md:inline-flex" data-testid="env-badge">Live · Production data</span>
             <Link to="/" className="text-sm text-ink-500 ink-link hidden md:inline-flex items-center gap-1">careeros.app <ArrowUpRight size={12} /></Link>
           </div>

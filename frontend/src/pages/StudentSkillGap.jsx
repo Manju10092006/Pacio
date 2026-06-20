@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { useAuth } from "../App";
-import { AlertTriangle, CheckCircle, Briefcase } from "lucide-react";
+import { AlertTriangle, CheckCircle, Briefcase, Award, ArrowRight } from "lucide-react";
 
 const COMPONENT_LABELS = {
   dsa: "DSA",
@@ -21,6 +21,15 @@ const RECOMMENDATIONS = {
   consistency: "Maintain daily streaks on the platform. Small daily effort compounds significantly.",
 };
 
+const ROLES = {
+  "Full Stack Developer": ["JavaScript", "React", "Node.js", "Express", "MongoDB", "REST API", "Authentication", "Git", "Deployment", "System Design"],
+  "Frontend Developer": ["HTML", "CSS", "JavaScript", "React", "TypeScript", "Tailwind", "Accessibility", "Responsive Design", "Testing"],
+  "Backend Developer": ["Node.js", "Express", "MongoDB", "PostgreSQL", "Redis", "JWT", "REST API", "System Design", "Docker"],
+  "AI/ML Engineer": ["Python", "Machine Learning", "NLP", "Embeddings", "Vector Search", "Pandas", "NumPy", "Model Evaluation"],
+  "Data Analyst": ["SQL", "Excel", "Python", "Pandas", "Power BI", "Statistics", "Dashboarding", "Storytelling"],
+  "Cloud/DevOps Engineer": ["Linux", "Docker", "Kubernetes", "AWS", "CI/CD", "Terraform", "Monitoring", "Security"]
+};
+
 function scoreColor(score) {
   if (score >= 75) return "bg-accent";
   if (score >= 50) return "bg-[#c1440e]";
@@ -38,6 +47,7 @@ export default function StudentSkillGap() {
   const [readiness, setReadiness] = useState(null);
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [targetRole, setTargetRole] = useState("Full Stack Developer");
 
   useEffect(() => {
     Promise.all([
@@ -64,6 +74,32 @@ export default function StudentSkillGap() {
     (readiness?.skills || []).map((s) => (typeof s === "string" ? s : s.name || "").toLowerCase())
   );
 
+  const requiredSkills = ROLES[targetRole] || [];
+  const matchedSkills = requiredSkills.filter((s) => mySkills.has(s.toLowerCase()));
+  const missingSkills = requiredSkills.filter((s) => !mySkills.has(s.toLowerCase()));
+  const roleMatchPct = requiredSkills.length ? Math.round((matchedSkills.length / requiredSkills.length) * 100) : 0;
+
+  const getRoadmap = () => {
+    if (missingSkills.length === 0) {
+      return [
+        { week: "Week 1", title: "Advanced Projects", detail: "Enhance existing projects with advanced design patterns and custom integrations." },
+        { week: "Week 2", title: "System Architecture", detail: "Study microservices, performance tuning, and scalability." },
+        { week: "Week 3", title: "Placement Prep", detail: "Focus on behavioral mock interviews and system design prep." },
+        { week: "Week 4", title: "Recruiter Reachout", detail: "Leverage direct references and high-match applications on CareerOS." },
+      ];
+    }
+    const chunks = [[], [], [], []];
+    missingSkills.forEach((skill, idx) => {
+      chunks[idx % 4].push(skill);
+    });
+    return [
+      { week: "Week 1", title: "Core Gaps", detail: chunks[0].length ? `Focus on mastering: ${chunks[0].join(", ")}.` : "Reinforce role fundamentals." },
+      { week: "Week 2", title: "Intermediate Build", detail: chunks[1].length ? `Build projects using: ${chunks[1].join(", ")}.` : "Integrate basic components." },
+      { week: "Week 3", title: "Advanced Integration", detail: chunks[2].length ? `Deep dive into: ${chunks[2].join(", ")}.` : "Add security and routing features." },
+      { week: "Week 4", title: "Verification & Resume", detail: chunks[3].length ? `Refine and test: ${chunks[3].join(", ")}. Update resume in Builder.` : "Re-generate ATS resume to highlight new skills." },
+    ];
+  };
+
   return (
     <div className="space-y-10">
       {/* Header */}
@@ -73,6 +109,73 @@ export default function StudentSkillGap() {
           Your Skill <span className="text-accent">Analysis</span>
         </h1>
         <p className="font-serif text-lg text-ink-500 mt-2 max-w-xl">Identify gaps, track improvement, and match against job requirements.</p>
+      </div>
+
+      {/* Target Role Selector & Gaps analysis */}
+      <div className="border border-line bg-paper p-8 space-y-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <div className="font-mono text-[10px] tracking-[0.24em] text-ink-400">TARGET ROLE INTEL</div>
+            <h3 className="font-display text-2xl mt-1 tracking-tight">Select Target Career Pathway</h3>
+          </div>
+          <select
+            value={targetRole}
+            onChange={(e) => setTargetRole(e.target.value)}
+            className="px-3 py-2 border border-line bg-bone-50 text-sm focus:outline-none focus:border-accent"
+          >
+            {Object.keys(ROLES).map((role) => (
+              <option key={role} value={role}>{role}</option>
+            ))}
+          </select>
+        </div>
+        
+        <div className="grid grid-cols-12 gap-6 items-center">
+          <div className="col-span-12 md:col-span-4 text-center md:text-left">
+            <div className="font-mono text-[10px] tracking-[0.24em] text-ink-400">ROLE MATCH ACCURACY</div>
+            <div className="font-display text-5xl md:text-6xl text-accent tracking-tightest leading-none mt-2 tnum">{roleMatchPct}%</div>
+            <p className="font-serif text-sm text-ink-500 mt-2">
+              Based on required core competencies for <strong>{targetRole}</strong>.
+            </p>
+          </div>
+          
+          <div className="col-span-12 md:col-span-8">
+            <div className="font-mono text-[10px] tracking-[0.2em] text-ink-400 mb-3">REQUIRED CORE SKILLS</div>
+            <div className="flex flex-wrap gap-2">
+              {requiredSkills.map((skill, idx) => {
+                const hasSkill = mySkills.has(skill.toLowerCase());
+                return (
+                  <span
+                    key={idx}
+                    className={`font-mono text-[10px] tracking-[0.15em] px-2.5 py-1 border transition-all ${
+                      hasSkill ? "border-accent bg-accent/5 text-accent" : "border-line text-ink-400 bg-bone-100"
+                    }`}
+                  >
+                    {skill.toUpperCase()} {hasSkill ? "✓" : "✗"}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Dynamic Weekly Roadmap */}
+      <div className="border border-line bg-paper p-8">
+        <div className="font-mono text-[10px] tracking-[0.24em] text-ink-400 mb-6">4-WEEK LEARNING ROADMAP</div>
+        <div className="grid grid-cols-12 gap-4">
+          {getRoadmap().map((step, idx) => (
+            <div key={idx} className="col-span-12 md:col-span-3 border border-line bg-bone-50 p-6 flex flex-col justify-between">
+              <div>
+                <div className="font-mono text-[10px] tracking-[0.2em] text-accent mb-2">{step.week.toUpperCase()}</div>
+                <h4 className="font-display text-lg tracking-tight mb-2">{step.title}</h4>
+                <p className="font-serif text-xs text-ink-600 leading-relaxed">{step.detail}</p>
+              </div>
+              <div className="flex items-center gap-1 mt-4 text-[10px] font-mono text-ink-400 uppercase tracking-widest">
+                Start Plan <ArrowRight size={10} />
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="grid grid-cols-12 gap-3">

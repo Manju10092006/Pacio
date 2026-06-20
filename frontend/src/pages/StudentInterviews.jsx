@@ -67,6 +67,14 @@ export default function StudentInterviews() {
   };
 
   const startInterview = async () => {
+    if (mode === "avatar") {
+      setSession({
+        session_id: "avatar_session",
+        questions: []
+      });
+      toast.success("LiveAvatar conversational mock interview started");
+      return;
+    }
     const { data } = await api.post("/me/interviews/mock/start", { mode, camera_enabled: cameraOn, microphone_enabled: micOn, notes });
     setSession(data);
     setActive(0);
@@ -184,65 +192,86 @@ export default function StudentInterviews() {
 
       <div className="grid grid-cols-12 gap-4">
         <div className="col-span-12 lg:col-span-8 editorial overflow-hidden" data-testid="mock-interview-room">
-          <div className="grid grid-cols-12 min-h-[620px]">
-            <div className="col-span-12 md:col-span-7 bg-ink text-bone p-6 flex flex-col">
-              <div className="flex items-center justify-between">
-                <div className="font-mono text-[10px] tracking-[0.24em] text-bone/45">INTERVIEW ROOM</div>
-                <div className="font-mono text-xs text-bone/60">{Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, "0")}</div>
-              </div>
-              <div className="mt-5 relative flex-1 min-h-[360px] border border-bone/10 bg-bone/5 grid place-items-center overflow-hidden">
-                <video ref={videoRef} autoPlay muted playsInline className={`absolute inset-0 h-full w-full object-cover ${cameraOn ? "opacity-100" : "opacity-0"}`} />
-                {!cameraOn && <div className="text-center text-bone/45"><Camera className="mx-auto mb-3" />Camera preview disabled</div>}
-              </div>
-              <div className="mt-4 grid grid-cols-4 gap-2">
-                <button className="btn justify-center py-2 text-[10px]" onClick={startCamera}><Video size={14} /> Enable</button>
-                <button className="btn justify-center py-2 text-[10px]" onClick={toggleCamera}>{cameraOn ? <VideoOff size={14} /> : <Video size={14} />} Camera</button>
-                <button className="btn justify-center py-2 text-[10px]" onClick={toggleMic}>{micOn ? <Mic size={14} /> : <MicOff size={14} />} Mic</button>
-                <button className="btn justify-center py-2 text-[10px]" disabled><MonitorUp size={14} /> Share</button>
-              </div>
-            </div>
-            <div className="col-span-12 md:col-span-5 p-6">
-              {!session ? (
+          {session && mode === "avatar" ? (
+            <div className="p-6 h-full flex flex-col justify-between min-h-[620px] bg-paper">
+              <div className="flex items-center justify-between border-b border-line pb-4 mb-4">
                 <div>
-                  <div className="font-mono text-[10px] tracking-[0.24em] text-ink-400">SETUP</div>
-                  <Select value={mode} onChange={(e) => setMode(e.target.value)} className="mt-4">
-                    <option value="hr">HR Interview Mode</option>
-                    <option value="technical">Technical Interview Mode</option>
-                    <option value="ai">AI Mock Interview Mode</option>
-                  </Select>
-                  <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Private notes for this interview..." className="mt-4 min-h-[140px] w-full border border-line bg-bone-50 p-3 text-sm" />
-                  <button onClick={startInterview} className="btn mt-4 w-full justify-center py-3 text-xs"><Play size={14} /> Start Interview</button>
+                  <div className="font-mono text-[10px] tracking-[0.24em] text-ink-400 font-semibold uppercase">Conversational AI Mode</div>
+                  <h3 className="font-display text-xl tracking-tight mt-1">LiveAvatar AI Interactive Interview</h3>
                 </div>
-              ) : (
-                <div className="h-full flex flex-col">
-                  <div className="font-mono text-[10px] tracking-[0.24em] text-ink-400">QUESTION {active + 1}/{session.questions.length}</div>
-                  <div className="font-display text-2xl mt-4">{activeQuestion?.prompt}</div>
-                  <div className="mt-5 grid grid-cols-2 gap-3">
-                    {!recording ? (
-                      <button onClick={startRecording} className="btn justify-center py-3 text-xs"><Mic size={14} /> Start Recording</button>
-                    ) : (
-                      <button onClick={stopRecording} className="btn justify-center py-3 text-xs bg-accent text-bone"><Square size={14} /> Stop Recording</button>
-                    )}
-                    <button onClick={saveAnswer} className="btn justify-center py-3 text-xs"><Send size={14} /> Save Answer</button>
-                  </div>
-                  <textarea value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder="Transcript appears here while you speak. You can edit it before saving." className="mt-4 min-h-[180px] w-full border border-line bg-bone-50 p-4 text-sm" />
-                  {recordings[activeQuestion?.question_id]?.url && (
-                    <video controls src={recordings[activeQuestion.question_id].url} className="mt-3 w-full border border-line bg-ink" />
-                  )}
-                  <div className="mt-4 grid grid-cols-1 gap-3">
-                    <button onClick={completeInterview} className="btn justify-center py-3 text-xs">Complete</button>
-                  </div>
-                  {feedback && (
-                    <div className="mt-6 border border-line bg-bone-50 p-4">
-                      <div className="font-display text-4xl text-accent tnum">{feedback.overall_score}</div>
-                      <div className="text-sm text-ink-500">Pace {feedback.speaking_pace} wpm / {feedback.response_length} words</div>
-                      <div className="mt-3 text-sm font-serif">{feedback.feedback}</div>
-                    </div>
-                  )}
-                </div>
-              )}
+                <button onClick={() => setSession(null)} className="btn px-4 py-2 text-xs">End Interview</button>
+              </div>
+              <div className="flex-1 border border-line bg-ink overflow-hidden min-h-[500px]">
+                <iframe
+                  src="https://embed.liveavatar.com/v1/6bb399fb-fc3c-4e1a-893e-5c4a2de11988?orientation=horizontal"
+                  allow="camera; microphone; display-capture"
+                  className="w-full h-full min-h-[500px]"
+                  title="LiveAvatar Mock Interview"
+                />
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="grid grid-cols-12 min-h-[620px]">
+              <div className="col-span-12 md:col-span-7 bg-ink text-bone p-6 flex flex-col">
+                <div className="flex items-center justify-between">
+                  <div className="font-mono text-[10px] tracking-[0.24em] text-bone/45">INTERVIEW ROOM</div>
+                  <div className="font-mono text-xs text-bone/60">{Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, "0")}</div>
+                </div>
+                <div className="mt-5 relative flex-1 min-h-[360px] border border-bone/10 bg-bone/5 grid place-items-center overflow-hidden">
+                  <video ref={videoRef} autoPlay muted playsInline className={`absolute inset-0 h-full w-full object-cover ${cameraOn ? "opacity-100" : "opacity-0"}`} />
+                  {!cameraOn && <div className="text-center text-bone/45"><Camera className="mx-auto mb-3" />Camera preview disabled</div>}
+                </div>
+                <div className="mt-4 grid grid-cols-4 gap-2">
+                  <button className="btn justify-center py-2 text-[10px]" onClick={startCamera}><Video size={14} /> Enable</button>
+                  <button className="btn justify-center py-2 text-[10px]" onClick={toggleCamera}>{cameraOn ? <VideoOff size={14} /> : <Video size={14} />} Camera</button>
+                  <button className="btn justify-center py-2 text-[10px]" onClick={toggleMic}>{micOn ? <Mic size={14} /> : <MicOff size={14} />} Mic</button>
+                  <button className="btn justify-center py-2 text-[10px]" disabled><MonitorUp size={14} /> Share</button>
+                </div>
+              </div>
+              <div className="col-span-12 md:col-span-5 p-6">
+                {!session ? (
+                  <div>
+                    <div className="font-mono text-[10px] tracking-[0.24em] text-ink-400">SETUP</div>
+                    <Select value={mode} onChange={(e) => setMode(e.target.value)} className="mt-4 animate-fade-in">
+                      <option value="hr">HR Interview Mode</option>
+                      <option value="technical">Technical Interview Mode</option>
+                      <option value="ai">AI Mock Interview Mode</option>
+                      <option value="avatar">LiveAvatar Conversational Mode</option>
+                    </Select>
+                    <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Private notes for this interview..." className="mt-4 min-h-[140px] w-full border border-line bg-bone-50 p-3 text-sm" />
+                    <button onClick={startInterview} className="btn mt-4 w-full justify-center py-3 text-xs"><Play size={14} /> Start Interview</button>
+                  </div>
+                ) : (
+                  <div className="h-full flex flex-col">
+                    <div className="font-mono text-[10px] tracking-[0.24em] text-ink-400">QUESTION {active + 1}/{session.questions.length}</div>
+                    <div className="font-display text-2xl mt-4">{activeQuestion?.prompt}</div>
+                    <div className="mt-5 grid grid-cols-2 gap-3">
+                      {!recording ? (
+                        <button onClick={startRecording} className="btn justify-center py-3 text-xs"><Mic size={14} /> Start Recording</button>
+                      ) : (
+                        <button onClick={stopRecording} className="btn justify-center py-3 text-xs bg-accent text-bone"><Square size={14} /> Stop Recording</button>
+                      )}
+                      <button onClick={saveAnswer} className="btn justify-center py-3 text-xs"><Send size={14} /> Save Answer</button>
+                    </div>
+                    <textarea value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder="Transcript appears here while you speak. You can edit it before saving." className="mt-4 min-h-[180px] w-full border border-line bg-bone-50 p-4 text-sm" />
+                    {recordings[activeQuestion?.question_id]?.url && (
+                      <video controls src={recordings[activeQuestion.question_id].url} className="mt-3 w-full border border-line bg-ink" />
+                    )}
+                    <div className="mt-4 grid grid-cols-1 gap-3">
+                      <button onClick={completeInterview} className="btn justify-center py-3 text-xs">Complete</button>
+                    </div>
+                    {feedback && (
+                      <div className="mt-6 border border-line bg-bone-50 p-4">
+                        <div className="font-display text-4xl text-accent tnum">{feedback.overall_score}</div>
+                        <div className="text-sm text-ink-500">Pace {feedback.speaking_pace} wpm / {feedback.response_length} words</div>
+                        <div className="mt-3 text-sm font-serif">{feedback.feedback}</div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="col-span-12 lg:col-span-4 grid gap-4">

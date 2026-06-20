@@ -262,6 +262,54 @@ export default function AnalyticsWorkbench() {
           )}
         </div>
       </section>
+
+      {/* PEER BENCHMARKING & COMPARISON */}
+      <section className="border border-line bg-bone-50 p-6 space-y-6" data-testid="analytics-benchmarking">
+        <div>
+          <div className="font-mono text-[10px] tracking-[0.24em] text-ink-400">PEER BENCHMARKING</div>
+          <h2 className="font-display text-2xl tracking-tight mt-1">Campus vs National Percentiles</h2>
+        </div>
+        <div className="grid grid-cols-12 gap-6">
+          <div className="col-span-12 md:col-span-7">
+            <div className="editorial divide-y divide-line">
+              <div className="grid grid-cols-12 gap-3 py-3 font-mono text-[10px] tracking-wider text-ink-400">
+                <div className="col-span-4">METRIC</div>
+                <div className="col-span-2 text-right">CAMPUS</div>
+                <div className="col-span-3 text-right">TIER-1 AVG</div>
+                <div className="col-span-3 text-right">PERCENTILE</div>
+              </div>
+              {[
+                { name: "Placement Rate", campus: "84.2%", peer: "72.4%", pct: "91st", status: "Outperforming" },
+                { name: "Average Package", campus: "₹7.4 LPA", peer: "₹5.8 LPA", pct: "94th", status: "Outperforming" },
+                { name: "DSA Mastery Avg", campus: "64.8%", peer: "51.2%", pct: "88th", status: "Strong" },
+                { name: "Interview Pass Rate", campus: "77.5%", peer: "62.0%", pct: "89th", status: "Strong" },
+              ].map((bench) => (
+                <div key={bench.name} className="grid grid-cols-12 gap-3 py-4 items-center text-sm">
+                  <div className="col-span-4">
+                    <div className="font-display font-bold">{bench.name}</div>
+                    <div className="font-mono text-[9px] text-accent uppercase tracking-wider mt-0.5">{bench.status}</div>
+                  </div>
+                  <div className="col-span-2 text-right font-display font-bold tnum">{bench.campus}</div>
+                  <div className="col-span-3 text-right text-ink-500 tnum">{bench.peer}</div>
+                  <div className="col-span-3 text-right font-mono font-bold text-accent tnum">{bench.pct}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="col-span-12 md:col-span-5 bg-bone-100/50 p-6 border border-line flex flex-col justify-between">
+            <div>
+              <div className="font-mono text-[9px] tracking-widest text-ink-400">BENCHMARK INSIGHT</div>
+              <h4 className="font-display text-lg tracking-tight font-bold mt-1">Tier-1 Cohort Performance</h4>
+              <p className="font-serif text-sm text-ink-600 mt-4 leading-relaxed">
+                Your campus ranks in the **top 10%** of affiliated engineering colleges in the state, driven by outstanding average CTC growth (+18.4% YoY) and above-average DSA consistency.
+              </p>
+            </div>
+            <div className="font-mono text-[9px] text-ink-400 border-t border-line/30 pt-3 mt-6">
+              National Placement Census · 2026
+            </div>
+          </div>
+        </div>
+      </section>
     </div>
   );
 }

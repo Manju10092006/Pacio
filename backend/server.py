@@ -1032,6 +1032,7 @@ async def _startup():
     await db.password_reset_tokens.create_index("expires_at", expireAfterSeconds=0)
     await db.comm_log.create_index("institution_id")
     await db.revenue_share.create_index("institution_id")
+    await db.saved_jobs.create_index([("user_id", 1), ("job_id", 1)], unique=True)
     n_inst = await db.institutions.count_documents({})
     if n_inst == 0:
         log.info("Seeding institutions, students, recruiters, DSA, aptitude…")
@@ -3601,7 +3602,7 @@ async def update_application(
             raise HTTPException(403, "forbidden")
     else:
         require_same_institution(app_doc.get("institution_id"), user)
-    allowed = {"stage", "next_step_at"}
+    allowed = {"stage", "next_step_at", "recruiter_notes", "notes"}
     update = {k: v for k, v in body.items() if k in allowed}
     if not update:
         return {"updated": 0}
@@ -6028,6 +6029,111 @@ async def get_career_recommendations(user=Depends(get_session_user)):
         }
     ]
     return {"recommendations": recs}
+
+
+# ============== JOB DISCOVERY & SAVED OPPORTUNITIES ==============
+class SavedJobBody(BaseModel):
+    id: str
+    title: str
+    company: str
+    location: str
+    salary: str
+    jobType: str
+    logo: str
+    url: str
+
+async def fetch_jooble_jobs(keywords: str = "developer", location: str = "India", page: int = 1):
+    jooble_key = os.environ.get("JOOBLE_API_KEY", "a29e9e09-4b4d-4c9d-ad14-48809c6c339f")
+    url = f"https://jooble.org/api/{jooble_key}"
+    payload = {
+        "keywords": keywords,
+        "location": location,
+        "page": page
+    }
+    async with httpx.AsyncClient() as client:
+        try:
+            res = await client.post(url, json=payload, headers={"Content-Type": "application/json"}, timeout=10.0)
+            if res.status_code != 200:
+                return {"success": False, "jobs": [], "error": f"Jooble returned {res.status_code}"}
+            data = res.json()
+            raw_jobs = data.get("jobs", [])
+            normalized = []
+            skill_keywords = [
+                'javascript', 'typescript', 'react', 'node', 'express', 'python', 'java',
+                'spring', 'sql', 'mongodb', 'aws', 'azure', 'docker', 'kubernetes',
+                'machine learning', 'data analysis', 'figma', 'ui', 'ux', 'html', 'css'
+            ]
+            for idx, job in enumerate(raw_jobs):
+                job_title = job.get("title", "Career Opportunity").replace("<[^>]+>", " ").strip()
+                snippet = job.get("snippet", job.get("description", "Live opportunity")).replace("<[^>]+>", " ").strip()
+                # infer skills
+                text = f"{job_title} {snippet}".lower()
+                inferred = [sk for sk in skill_keywords if sk in text]
+                if not inferred:
+                    inferred = ["Communication", "Problem Solving"]
+                else:
+                    inferred = inferred[:6]
+                
+                normalized.append({
+                    "id": job.get("id") or f"jooble-{page}-{idx}",
+                    "title": job_title,
+                    "company": job.get("company", "Hiring Company").replace("<[^>]+>", " ").strip(),
+                    "location": job.get("location", "India").replace("<[^>]+>", " ").strip(),
+                    "salary": job.get("salary", "Salary not disclosed").replace("<[^>]+>", " ").strip(),
+                    "jobType": job.get("type") or job.get("jobType") or "Full-time",
+                    "type": job.get("type") or job.get("jobType") or "Full-time",
+                    "applyLink": job.get("link") or job.get("url") or "#",
+                    "url": job.get("link") or job.get("url") or "#",
+                    "snippet": snippet[:300] + "..." if len(snippet) > 300 else snippet,
+                    "skills": inferred,
+                    "badges": [job.get("type") or "Full-time"],
+                    "updated": job.get("updated") or job.get("date"),
+                    "source": "Jooble"
+                })
+            return {
+                "success": True,
+                "source": "jooble",
+                "totalCount": data.get("totalCount") or len(normalized),
+                "jobs": normalized
+            }
+        except Exception as e:
+            return {"success": False, "jobs": [], "error": str(e)}
+
+@app.get("/api/jobs/discover")
+async def discover_jobs(keywords: str = "developer", location: str = "India", page: int = 1, user=Depends(get_session_user)):
+    res = await fetch_jooble_jobs(keywords, location, page)
+    return res
+
+@app.get("/api/saved-jobs")
+async def get_saved_jobs(user=Depends(get_session_user)):
+    items = await db.saved_jobs.find({"user_id": user["user_id"]}, {"_id": 0}).to_list(100)
+    return {"items": items}
+
+@app.post("/api/saved-jobs")
+async def save_job(payload: SavedJobBody, user=Depends(get_session_user)):
+    doc = {
+        "user_id": user["user_id"],
+        "job_id": payload.id,
+        "title": payload.title,
+        "company": payload.company,
+        "location": payload.location,
+        "salary": payload.salary,
+        "jobType": payload.jobType,
+        "logo": payload.logo,
+        "url": payload.url,
+        "saved_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.saved_jobs.update_one(
+        {"user_id": user["user_id"], "job_id": payload.id},
+        {"$set": doc},
+        upsert=True
+    )
+    return {"success": True, "saved": True}
+
+@app.delete("/api/saved-jobs/{job_id}")
+async def delete_saved_job(job_id: str, user=Depends(get_session_user)):
+    await db.saved_jobs.delete_one({"user_id": user["user_id"], "job_id": job_id})
+    return {"success": True}
 
 
 @app.get("/{full_path:path}")

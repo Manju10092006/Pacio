@@ -26,6 +26,9 @@ export default function StudentDSA() {
   const [customInput, setCustomInput] = useState("");
   const [execution, setExecution] = useState(null);
   const [runningCode, setRunningCode] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [difficultyFilter, setDifficultyFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
 
   const load = async () => {
     const [{ data: dashboard }, { data: questionProgress }] = await Promise.all([
@@ -157,11 +160,65 @@ export default function StudentDSA() {
         </div>
       </DashboardReveal>
 
+      {/* Filters Bar */}
+      <div className="border border-line bg-paper p-6 flex flex-col md:flex-row items-center justify-between gap-4">
+        <div className="w-full md:w-1/3">
+          <label className="block font-mono text-[9px] tracking-wider text-ink-400 mb-1.5 uppercase font-semibold">Search Problems</label>
+          <Input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search by title, e.g. Two Sum..."
+            className="w-full py-2 px-3 text-xs bg-bone-50"
+          />
+        </div>
+        <div className="flex flex-wrap items-center gap-4 w-full md:w-auto">
+          <div>
+            <label className="block font-mono text-[9px] tracking-wider text-ink-400 mb-1.5 uppercase font-semibold">Difficulty</label>
+            <div className="flex items-center border border-line bg-bone-50 p-0.5">
+              {["all", "easy", "medium", "hard"].map((dFilter) => (
+                <button
+                  key={dFilter}
+                  onClick={() => setDifficultyFilter(dFilter)}
+                  className={`px-3 py-1.5 text-[10px] font-mono uppercase transition-all ${
+                    difficultyFilter === dFilter ? "bg-ink text-bone font-semibold" : "text-ink/65 hover:bg-bone-100"
+                  }`}
+                >
+                  {dFilter}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="block font-mono text-[9px] tracking-wider text-ink-400 mb-1.5 uppercase font-semibold">Status</label>
+            <div className="flex items-center border border-line bg-bone-50 p-0.5">
+              {["all", "solved", "unsolved"].map((sFilter) => (
+                <button
+                  key={sFilter}
+                  onClick={() => setStatusFilter(sFilter)}
+                  className={`px-3 py-1.5 text-[10px] font-mono uppercase transition-all ${
+                    statusFilter === sFilter ? "bg-ink text-bone font-semibold" : "text-ink/65 hover:bg-bone-100"
+                  }`}
+                >
+                  {sFilter}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
       <DashboardReveal className="grid grid-cols-12 gap-4" data-testid="sdsa-topics">
         {d.dsa.map((t) => {
           const p = Math.round((t.solved / t.total) * 100);
           const topicDetail = d.dsa_question_progress?.topics?.find((row) => row.topic_code === t.topic_code);
           const questions = topicDetail?.questions || [];
+          const filteredQuestions = questions.filter((q) => {
+            const matchesSearch = searchQuery ? q.title.toLowerCase().includes(searchQuery.toLowerCase()) : true;
+            const matchesDifficulty = difficultyFilter === "all" ? true : q.difficulty?.toLowerCase() === difficultyFilter;
+            const matchesStatus = statusFilter === "all" ? true : statusFilter === "solved" ? q.solved : !q.solved;
+            return matchesSearch && matchesDifficulty && matchesStatus;
+          });
           return (
             <div key={t.topic_code} className="col-span-12 md:col-span-6 lg:col-span-4 editorial p-6 flex flex-col justify-between dash-reveal" data-testid={`sdsa-${t.topic_code}`}>
               <div>
@@ -195,7 +252,7 @@ export default function StudentDSA() {
                   <Badge variant="outline" className="text-[8px] py-0.2">{topicDetail?.attempted || 0} ATTEMPTS</Badge>
                 </div>
                 <div className="mt-3 max-h-64 overflow-y-auto pr-1 space-y-1" data-testid={`sdsa-questions-${t.topic_code}`}>
-                  {questions.map((question) => (
+                  {filteredQuestions.map((question) => (
                     <button
                       key={question.question_id}
                       onClick={() => {
@@ -209,6 +266,9 @@ export default function StudentDSA() {
                       <span className="font-mono text-[9px] text-ink/40 uppercase">{question.difficulty}</span>
                     </button>
                   ))}
+                  {filteredQuestions.length === 0 && (
+                    <div className="text-[10px] text-ink-400 italic px-2.5 py-2">No problems match filters.</div>
+                  )}
                 </div>
               </div>
             </div>

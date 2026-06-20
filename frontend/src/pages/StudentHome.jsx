@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { useAuth } from "../App";
-import { Code2, TrendingUp, Award, Briefcase, ChevronRight } from "lucide-react";
+import { Code2, TrendingUp, Award, Briefcase, ChevronRight, Eye, ShieldCheck, Copy } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Badge, Progress, EmptyState } from "../components/Primitives";
 import { PageTransition, DashboardReveal, CounterAnimation } from "../components/Motion";
+import { toast } from "sonner";
 
 export default function StudentHome() {
   useAuth();
@@ -27,6 +28,31 @@ export default function StudentHome() {
   const readiness = Math.round(engine?.score ?? s.readiness_score);
   const atsScore = Math.round(engine?.components?.ats?.score ?? d.ats?.score ?? s.ats_score);
   const interviewScore = Math.round(engine?.components?.interview?.score ?? intAvg);
+
+  // Discoverability calculations
+  const hasLinkedin = s.linkedin_url || workspace?.linkedin || false;
+  const hasGithub = s.github_url || workspace?.github || false;
+  const skillsList = s.skills || [];
+  const discoverabilityScore = Math.min(
+    100,
+    Math.round(
+      (atsScore * 0.4) + 
+      (hasLinkedin ? 25 : 0) + 
+      (hasGithub ? 20 : 0) + 
+      (skillsList.length > 5 ? 15 : skillsList.length * 3)
+    )
+  );
+
+  const missingKeywords = ["System Design", "REST API", "Docker", "CI/CD", "AWS", "Unit Testing"].filter(
+    (k) => !skillsList.some((sk) => (typeof sk === "string" ? sk : sk.name || "").toLowerCase() === k.toLowerCase())
+  );
+
+  const templateHeadline = `${s.department || "Software"} Engineer | JavaScript | React | Python | Deployed Products`;
+
+  const copyToClipboard = (text) => {
+    navigator.clipboard.writeText(text);
+    toast.success("Copied to clipboard!");
+  };
 
   return (
     <PageTransition className="space-y-10">
@@ -98,6 +124,90 @@ export default function StudentHome() {
         ))}
       </DashboardReveal>
 
+      {/* Discoverability Insights Bento Row */}
+      <div className="grid grid-cols-12 gap-4">
+        {/* Discoverability Card */}
+        <div className="col-span-12 md:col-span-4 border border-line bg-paper p-8 flex flex-col justify-between">
+          <div>
+            <div className="font-mono text-[10px] tracking-[0.24em] text-ink-400 mb-2">RECRUITER VISIBILITY</div>
+            <h3 className="font-display text-2xl tracking-tight mb-4 flex items-center gap-2">
+              Discoverability Intel <Eye size={18} className="text-accent" />
+            </h3>
+            
+            <div className="flex items-center gap-4">
+              <div className="font-display text-5xl text-accent tnum">{discoverabilityScore}%</div>
+              <div>
+                <div className="text-xs font-mono tracking-widest text-ink-400">VISIBILITY STATUS</div>
+                <div className="text-sm font-serif text-ink-700 mt-0.5">
+                  {discoverabilityScore >= 80 ? "Highly Discoverable" : discoverabilityScore >= 50 ? "Visible with Gaps" : "Hidden Profile"}
+                </div>
+              </div>
+            </div>
+            <div className="h-1.5 bg-bone-200 mt-4 relative">
+              <div className="absolute inset-y-0 left-0 bg-accent transition-all" style={{ width: `${discoverabilityScore}%` }} />
+            </div>
+          </div>
+          
+          <ul className="space-y-2 mt-6 text-xs font-mono text-ink-500">
+            <li className="flex items-center gap-1.5">
+              <span className={hasLinkedin ? "text-accent" : "text-ink-300"}>{hasLinkedin ? "✓" : "✗"}</span> LinkedIn URL configured
+            </li>
+            <li className="flex items-center gap-1.5">
+              <span className={hasGithub ? "text-accent" : "text-ink-300"}>{hasGithub ? "✓" : "✗"}</span> GitHub Link configured
+            </li>
+            <li className="flex items-center gap-1.5">
+              <span className={atsScore >= 75 ? "text-accent" : "text-ink-300"}>{atsScore >= 75 ? "✓" : "✗"}</span> ATS Score &gt;= 75
+            </li>
+          </ul>
+        </div>
+
+        {/* Missing Keywords & Headline Templates */}
+        <div className="col-span-12 md:col-span-8 border border-line bg-bone-50 p-8 flex flex-col justify-between">
+          <div>
+            <div className="font-mono text-[10px] tracking-[0.24em] text-ink-400 mb-2">KEYWORD DELTA & HEADLINE TEMPLATE</div>
+            <h3 className="font-display text-2xl tracking-tight mb-4 flex items-center gap-2">
+              Optimize Search Signals <ShieldCheck size={18} className="text-accent" />
+            </h3>
+            
+            {/* Template Headline */}
+            <div className="p-4 border border-line bg-paper flex items-center justify-between gap-4">
+              <div>
+                <div className="font-mono text-[9px] text-ink-400 tracking-widest">RECOMMENDED PROFILE HEADLINE</div>
+                <div className="font-mono text-xs text-ink-800 font-bold mt-1 leading-relaxed">
+                  {templateHeadline}
+                </div>
+              </div>
+              <button 
+                onClick={() => copyToClipboard(templateHeadline)}
+                className="p-2 border border-line hover:border-accent text-ink-500 hover:text-accent bg-bone-50"
+                title="Copy Headline Template"
+              >
+                <Copy size={12} />
+              </button>
+            </div>
+
+            {/* Missing Keywords */}
+            <div className="mt-6">
+              <div className="font-mono text-[9px] text-ink-400 tracking-widest mb-3">HIGH-DEMAND KEYWORD GAPS</div>
+              <div className="flex flex-wrap gap-1.5">
+                {missingKeywords.map((kw, idx) => (
+                  <span key={idx} className="font-mono text-[9px] tracking-wider px-2 py-1 border border-line bg-paper text-ink-600">
+                    + {kw.toUpperCase()}
+                  </span>
+                ))}
+                {missingKeywords.length === 0 && (
+                  <span className="font-serif text-xs text-ink-500">No missing high-demand keywords! Perfect matching.</span>
+                )}
+              </div>
+            </div>
+          </div>
+          
+          <p className="font-serif text-xs text-ink-400 leading-relaxed mt-6">
+            Adding these keywords to your resume summary, project descriptions, and LinkedIn profile significantly increases your matching rate in recruiter searches.
+          </p>
+        </div>
+      </div>
+
       {/* Decision queue */}
       {workspace?.actions?.length > 0 && (
         <DashboardReveal className="grid grid-cols-12 gap-4" data-testid="student-decision-queue">
@@ -122,7 +232,7 @@ export default function StudentHome() {
               const pct = Math.round((t.solved / t.total) * 100);
               return (
                 <div key={t.topic_code} className="border border-line p-4 bg-bone-100/50">
-                  <div className="font-mono text-[9px] tracking-[0.2em] text-ink-400">{t.topic_code}</div>
+                  <div className="font-mono text-[9px] tracking-[0.2] text-ink-400">{t.topic_code}</div>
                   <div className="font-display text-sm tracking-tight mt-1 truncate">{t.topic_name}</div>
                   <div className="font-display text-2xl mt-3 tnum">{t.solved}<span className="text-ink-400 text-sm font-light">/{t.total}</span></div>
                   <div className="mt-3">

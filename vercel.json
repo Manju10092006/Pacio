@@ -1,5 +1,5 @@
 {
-  "buildCommand": "cd frontend && npm install --no-package-lock && npm run build",
+  "buildCommand": "cd frontend && npm install --no-package-lock && CI=false npm run build",
   "rewrites": [
     {
       "source": "/(.*)",

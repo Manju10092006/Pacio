@@ -20,19 +20,20 @@ export default function StudentHome() {
   const canvasRef = useRef(null);
 
   useEffect(() => {
-    if (showCertificate && canvasRef.current && s) {
+    if (showCertificate && canvasRef.current && d?.student) {
+      const student = d.student;
       const canvas = canvasRef.current;
-      const collegeName = s.institution_id === "inst_kmit" ? "Keshav Memorial Institute of Technology" : (s.institution_id?.replace("inst_", "").toUpperCase() + " Engineering College");
+      const collegeName = student.institution_id === "inst_kmit" ? "Keshav Memorial Institute of Technology" : (student.institution_id?.replace("inst_", "").toUpperCase() + " Engineering College");
       const certTypeData = CERTIFICATE_TYPES[selectedCertType];
-      const certId = `ST-${selectedCertType}-${s.student_id?.slice(4, 10).toUpperCase() || "XXXX"}`;
+      const certId = `ST-${selectedCertType}-${student.student_id?.slice(4, 10).toUpperCase() || "XXXX"}`;
       const dateStr = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
       
       const certData = {
         title: certTypeData.title,
         description: certTypeData.description,
-        studentName: s.name,
-        rollNumber: s.roll_number,
-        branch: s.department || "CSE",
+        studentName: student.name,
+        rollNumber: student.roll_number,
+        branch: student.department || "CSE",
         collegeName: collegeName,
         certId: certId,
         date: dateStr,
@@ -43,7 +44,7 @@ export default function StudentHome() {
       renderCertificateToCanvas(canvas, certData);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showCertificate, selectedCertType, d, s]);
+  }, [showCertificate, selectedCertType, d]);
 
   const downloadPNG = () => {
     if (!canvasRef.current) return;

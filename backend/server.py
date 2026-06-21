@@ -1395,6 +1395,54 @@ async def list_students(
     return {"items": items, "count": len(items)}
 
 
+@app.get("/api/search")
+async def global_search(q: str = "", user=Depends(get_session_user)):
+    """Command-palette search across students, institutions, recruiters, and jobs (role-scoped).
+
+    Scope keys are placed before any $or so the in-memory matcher applies them correctly.
+    """
+    term = (q or "").strip()
+    if len(term) < 2:
+        return {"results": []}
+    role = user.get("role")
+    iid = user.get("institution_id")
+    rx = {"$regex": term, "$options": "i"}
+    results = []
+
+    if role in {"super_admin", "institution_admin", "tpo", "faculty"}:
+        sq = {}
+        skip_students = False
+        if role != "super_admin":
+            if iid:
+                sq["institution_id"] = iid
+                if role == "faculty" and user.get("department"):
+                    sq["department"] = user["department"]
+            else:
+                skip_students = True
+        if not skip_students:
+            sq["$or"] = [{"name": rx}, {"roll_number": rx}]
+            for s in await db.students.find(sq, {"_id": 0}).limit(6).to_list(6):
+                sub = " / ".join([x for x in [s.get("roll_number"), s.get("department")] if x])
+                results.append({"category": "student", "label": s.get("name"), "sublabel": sub, "id": s.get("student_id")})
+
+    if role == "super_admin":
+        for inst in await db.institutions.find({"$or": [{"name": rx}, {"short_name": rx}]}, {"_id": 0}).limit(6).to_list(6):
+            results.append({"category": "institution", "label": inst.get("name"), "sublabel": inst.get("short_name"), "id": inst.get("institution_id")})
+
+    if role in {"super_admin", "institution_admin", "tpo"}:
+        for rec in await db.recruiters.find({"name": rx}, {"_id": 0}).limit(6).to_list(6):
+            results.append({"category": "recruiter", "label": rec.get("name"), "sublabel": rec.get("industry"), "id": rec.get("recruiter_id")})
+
+    jq = {}
+    if role != "super_admin" and iid:
+        jq["institutions"] = {"$in": [iid]}
+    jq["$or"] = [{"title": rx}, {"company": rx}]
+    for job in await db.jobs.find(jq, {"_id": 0}).limit(6).to_list(6):
+        results.append({"category": "job", "label": job.get("title"), "sublabel": job.get("company"), "id": job.get("job_id")})
+
+    return {"results": results[:18]}
+
+
 @app.post("/api/students")
 async def add_student(
     body: dict,

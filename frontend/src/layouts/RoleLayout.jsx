@@ -71,11 +71,38 @@ export default function RoleLayout({ label, role, accent, sections }) {
   const [cmdOpen, setCmdOpen] = useState(false);
   const [cmdQuery, setCmdQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [cmdResults, setCmdResults] = useState([]);
 
   const allItems = sections.flatMap((s) => s.items);
   const filteredItems = allItems.filter((item) =>
     item.label.toLowerCase().includes(cmdQuery.toLowerCase())
   );
+
+  // Entity search (students, recruiters, colleges, drives) — turns the page palette into a
+  // true command palette. Additive: page search + keyboard nav above are unchanged.
+  useEffect(() => {
+    const term = cmdQuery.trim();
+    if (!cmdOpen || term.length < 2) { setCmdResults([]); return undefined; }
+    let alive = true;
+    const t = setTimeout(() => {
+      api.get("/search", { params: { q: term } })
+        .then(({ data }) => { if (alive) setCmdResults(data.results || []); })
+        .catch(() => { if (alive) setCmdResults([]); });
+    }, 200);
+    return () => { alive = false; clearTimeout(t); };
+  }, [cmdQuery, cmdOpen]);
+
+  const destByKeys = (keys) => (allItems.find((i) => keys.includes(i.key)) || {}).to;
+  const CATEGORY_DEST = {
+    student: destByKeys(["roster", "departments"]),
+    recruiter: destByKeys(["rec", "recruiters", "talent"]),
+    institution: destByKeys(["institutions", "profile"]),
+    job: destByKeys(["jobs"]),
+  };
+  const CATEGORY_LABEL = { student: "Student", recruiter: "Recruiter", institution: "Institution", job: "Drive" };
+  const entityCommands = (cmdResults || [])
+    .map((r) => ({ ...r, to: CATEGORY_DEST[r.category] }))
+    .filter((r) => r.to);
 
   useEffect(() => { setOpen(false); }, [location.pathname]);
   useEffect(() => {
@@ -158,7 +185,7 @@ export default function RoleLayout({ label, role, accent, sections }) {
               <input
                 type="text"
                 autoFocus
-                placeholder="Type a page name to navigate..."
+                placeholder="Search pages, students, recruiters, colleges, drives..."
                 value={cmdQuery}
                 onChange={(e) => setCmdQuery(e.target.value)}
                 className="w-full bg-transparent focus:outline-none font-sans text-sm text-ink-900"
@@ -190,8 +217,28 @@ export default function RoleLayout({ label, role, accent, sections }) {
                   </div>
                 );
               })}
-              {filteredItems.length === 0 && (
-                <div className="p-8 text-center text-ink-400 font-serif">No matching pages found.</div>
+              {entityCommands.length > 0 && (
+                <div className="px-4 py-2 bg-bone-100/60 font-mono text-[9px] tracking-[0.22em] text-ink-400 uppercase">Records</div>
+              )}
+              {entityCommands.map((r, idx) => (
+                <div
+                  key={`${r.category}-${r.id || idx}`}
+                  onClick={() => { navigate(r.to); setCmdOpen(false); }}
+                  className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-bone-100/50"
+                  data-testid={`cmd-record-${r.category}`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="font-mono text-[9px] tracking-[0.16em] uppercase text-accent w-[68px] shrink-0">{CATEGORY_LABEL[r.category] || r.category}</span>
+                    <span className="text-ink-700 truncate">{r.label}</span>
+                    {r.sublabel && <span className="text-ink-400 truncate hidden sm:inline">{r.sublabel}</span>}
+                  </div>
+                  <ArrowUpRight size={13} className="text-ink-300 shrink-0" />
+                </div>
+              ))}
+              {filteredItems.length === 0 && entityCommands.length === 0 && (
+                <div className="p-8 text-center text-ink-400 font-serif">
+                  {cmdQuery.trim().length >= 2 ? "No matching pages or records found." : "Search pages, students, recruiters, colleges, and drives."}
+                </div>
               )}
             </div>
           </div>

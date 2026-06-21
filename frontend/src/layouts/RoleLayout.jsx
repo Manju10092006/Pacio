@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { NavLink, Outlet, Link, useNavigate, useLocation } from "react-router-dom";
-import { LogOut, ArrowUpRight, Menu, X } from "lucide-react";
+import { LogOut, ArrowUpRight, Menu, X, Video } from "lucide-react";
 import { useAuth } from "../App";
 import { api, setAuthToken } from "../lib/api";
 
-function SidebarBody({ label, role, accent, sections, user, onLogout, isMobile, onClose }) {
+function SidebarBody({ label, role, accent, sections, user, onLogout, isMobile, onClose, onLiveAvatar }) {
   return (
     <div className="h-full w-[280px] bg-bone-50 border-r border-line flex flex-col">
       <div className="p-6 border-b border-line flex items-start justify-between">
@@ -44,6 +44,25 @@ function SidebarBody({ label, role, accent, sections, user, onLogout, isMobile, 
             </nav>
           </div>
         ))}
+        {role === "student" && (
+          <div className="mb-6">
+            <div className="px-7 pb-2 font-mono text-[10px] tracking-[0.28em] text-ink-400">AI INTERVIEW</div>
+            <nav className="px-3">
+              <button
+                type="button"
+                onClick={() => {
+                  onLiveAvatar?.();
+                  onClose?.();
+                }}
+                data-testid="nav-live-avatar"
+                className="w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors border-l-2 border-transparent text-ink-500 hover:text-ink-900 hover:bg-bone-100"
+              >
+                <Video size={16} />
+                <span>Live Avatar</span>
+              </button>
+            </nav>
+          </div>
+        )}
       </div>
       <div className="p-5 border-t border-line">
         <div className="flex items-center gap-3">
@@ -69,6 +88,7 @@ export default function RoleLayout({ label, role, accent, sections }) {
   const location = useLocation();
   const [open, setOpen] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
+  const [avatarOpen, setAvatarOpen] = useState(false);
   const [cmdQuery, setCmdQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [cmdResults, setCmdResults] = useState([]);
@@ -152,7 +172,7 @@ export default function RoleLayout({ label, role, accent, sections }) {
     navigate("/");
   };
 
-  const shared = { label, role, accent, sections, user, onLogout: logout };
+  const shared = { label, role, accent, sections, user, onLogout: logout, onLiveAvatar: () => setAvatarOpen(true) };
 
   return (
     <div className="min-h-screen bg-bone-100 text-ink-900 flex">
@@ -243,6 +263,31 @@ export default function RoleLayout({ label, role, accent, sections }) {
             </div>
           </div>
         </div>
+      )}
+
+      {avatarOpen && role === "student" && (
+        <>
+          <div className="fixed inset-0 bg-ink-900/40 z-40" onClick={() => setAvatarOpen(false)} aria-hidden />
+          <aside className="fixed inset-y-0 right-0 z-50 w-full max-w-4xl bg-bone-50 border-l border-line shadow-2xl flex flex-col" data-testid="live-avatar-drawer">
+            <div className="h-14 border-b border-line px-5 flex items-center justify-between">
+              <div>
+                <div className="font-mono text-[10px] tracking-[0.24em] text-ink-400">LIVE AVATAR MOCK INTERVIEW</div>
+                <div className="font-display text-xl tracking-tight">Practice with camera and microphone</div>
+              </div>
+              <button onClick={() => setAvatarOpen(false)} className="p-2 hover:bg-bone-100" aria-label="Close LiveAvatar">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="flex-1 bg-ink p-3">
+              <iframe
+                src="https://embed.liveavatar.com/v1/13943121-d0b6-44f1-abbf-14871d7911ca?orientation=horizontal"
+                allow="camera; microphone; display-capture"
+                className="w-full h-full min-h-[calc(100vh-92px)] bg-ink"
+                title="CareerOS LiveAvatar Interview"
+              />
+            </div>
+          </aside>
+        </>
       )}
 
       <main className="flex-1 min-w-0 relative">

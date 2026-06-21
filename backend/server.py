@@ -77,6 +77,12 @@ else:
     db = MemoryDB()
     gridfs = MemoryGridFS()
 
+CORE_COLLECTIONS = [
+    "users", "students", "institutions", "recruiters", "applications", "placements",
+    "programs", "cohorts", "mous", "fdp_sessions", "revenue_share", "comm_logs",
+    "saved_jobs", "notifications",
+]
+
 app = FastAPI(title="CareerOS")
 FRONTEND_BUILD = ROOT.parent / "frontend" / "build"
 SPA_HEADERS = {"Cache-Control": "no-store, max-age=0"}
@@ -1013,6 +1019,8 @@ async def _student_dsa_question_payload(student: dict) -> dict:
 # ============== STARTUP - seed + demo users ==============
 @app.on_event("startup")
 async def _startup():
+    for collection_name in CORE_COLLECTIONS:
+        await db[collection_name].create_index("_id")
     await db.users.create_index("email", unique=True)
     await db.user_sessions.create_index("jwt_id", unique=True)
     await db.audit_logs.create_index("created_at")
@@ -1036,11 +1044,14 @@ async def _startup():
     await db.revenue_share.create_index("institution_id")
     await db.saved_jobs.create_index([("user_id", 1), ("job_id", 1)], unique=True)
     n_inst = await db.institutions.count_documents({})
-    if n_inst == 0:
+    n_students = await db.students.count_documents({})
+    n_recruiters = await db.recruiters.count_documents({})
+    n_apps = await db.applications.count_documents({})
+    if n_inst == 0 or n_students == 0 or n_recruiters == 0 or n_apps == 0:
         log.info("Seeding institutions, students, recruiters, DSA, aptitude…")
         payload = seed_payload()
         for col, items in payload.items():
-            if items:
+            if items and await db[col].count_documents({}) == 0:
                 await db[col].insert_many(items)
         log.info("Seeded %d institutions, %d students, %d jobs, %d applications, %d DSA rows",
                  len(payload["institutions"]), len(payload["students"]),

@@ -7,6 +7,8 @@ import { AlertTriangle, ArrowUpRight, CheckCircle2 } from "lucide-react";
 import VoiceSummary from "../components/VoiceSummary";
 import HealthBreakdown from "../components/HealthBreakdown";
 import HighRiskStudents from "../components/HighRiskStudents";
+import WhatIfSimulator from "../components/WhatIfSimulator";
+import AnomalyDetective from "../components/AnomalyDetective";
 import AICopilot from "../components/AICopilot";
 
 const num = (value, decimals = 0) => {
@@ -232,6 +234,16 @@ export default function Overview() {
           </div>
         </div>
       )}
+
+      {/* WHAT-IF SIMULATOR + ANOMALY DETECTIVE (CareerOS intelligence layer) */}
+      <div className="grid grid-cols-12 gap-3" data-testid="whatif-anomaly-row">
+        <div className="col-span-12 md:col-span-6">
+          <WhatIfSimulator />
+        </div>
+        <div className="col-span-12 md:col-span-6">
+          <AnomalyDetective />
+        </div>
+      </div>
 
       <div className="grid grid-cols-12 gap-3">
         <div className="col-span-12 md:col-span-8 editorial p-8" data-testid="yoy-card">

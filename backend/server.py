@@ -67,13 +67,13 @@ ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "admin@careeros.app")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "careeros2026")
 DEFAULT_DEMO_PASSWORD = os.environ.get("DEFAULT_DEMO_PASSWORD", "careeros2026")
 
+client = None
 if MONGO_URL:
-    client = AsyncIOMotorClient(MONGO_URL)
-    db = client[DB_NAME]
-    gridfs = AsyncIOMotorGridFSBucket(db, bucket_name="mou_files")
+    log.info("MONGO_URL configured; MongoDB Atlas will initialize on startup")
+    db = MemoryDB()
+    gridfs = MemoryGridFS()
 else:
     log.warning("MONGO_URL not configured; using in-memory demo database")
-    client = None
     db = MemoryDB()
     gridfs = MemoryGridFS()
 
@@ -1017,10 +1017,103 @@ async def _student_dsa_question_payload(student: dict) -> dict:
 
 
 # ============== STARTUP - seed + demo users ==============
+async def _ensure_database():
+    global client, db, gridfs
+    if not MONGO_URL or client is not None:
+        return
+    client = AsyncIOMotorClient(MONGO_URL, serverSelectionTimeoutMS=10000)
+    db = client[DB_NAME]
+    gridfs = AsyncIOMotorGridFSBucket(db, bucket_name="mou_files")
+    await db.command("ping")
+
+
+async def _ensure_production_minimums():
+    seed_columns = ["institutions", "students", "recruiters", "applications", "mous", "revenue_share"]
+    missing_seed_columns = [col for col in seed_columns if await db[col].count_documents({}) == 0]
+    if missing_seed_columns:
+        payload = seed_payload()
+        for col in missing_seed_columns:
+            items = payload.get(col, [])
+            if items:
+                await db[col].insert_many(items)
+
+    demo_users = [
+        {"email": ADMIN_EMAIL, "name": "Platform Super Admin", "role": "super_admin", "institution_id": None, "department": None},
+        {"email": "institution@kmit.in", "name": "KMIT - Institution Admin", "role": "institution_admin", "institution_id": "inst_kmit"},
+        {"email": "tpo@kmit.in", "name": "Dr. Neil Gogte", "role": "tpo", "institution_id": "inst_kmit"},
+        {"email": "faculty@kmit.in", "name": "Prof. Lavanya Iyer", "role": "faculty", "institution_id": "inst_kmit", "department": "CSE"},
+        {"email": "student@kmit.in", "name": "Aarav Reddy", "role": "student", "institution_id": "inst_kmit", "department": "CSE"},
+        {"email": "recruiter@amazon.com", "name": "Priya Sharma (Amazon)", "role": "recruiter", "institution_id": None, "department": None},
+        {"email": "tpo@vasavi.ac.in", "name": "Dr. Suresh Kumar", "role": "tpo", "institution_id": "inst_vasavi_pending", "approved": False},
+    ]
+    for d in demo_users:
+        existing = await db.users.find_one({"email": d["email"]})
+        if existing is None:
+            new = _new_user(
+                email=d["email"], name=d["name"], role=d["role"],
+                institution_id=d.get("institution_id"),
+                department=d.get("department"),
+                password=DEFAULT_DEMO_PASSWORD if d["role"] != "super_admin" else ADMIN_PASSWORD,
+                approved=d.get("approved", True),
+            )
+            if d["role"] == "student":
+                real_stu = await db.students.find_one(
+                    {"institution_id": "inst_kmit", "department": "CSE"}, {"_id": 0}
+                )
+                if real_stu:
+                    new["student_id"] = real_stu["student_id"]
+                    await db.students.update_one(
+                        {"student_id": real_stu["student_id"]},
+                        {"$set": {"name": d["name"], "email": d["email"]}},
+                    )
+            try:
+                await db.users.insert_one(new)
+            except Exception as e:
+                log.warning("Skipping user %s: %s", d["email"], e)
+        else:
+            await db.users.update_one({"email": d["email"]}, {"$set": {
+                "role": d["role"],
+                "institution_id": d.get("institution_id"),
+                "department": d.get("department"),
+                "approved": d.get("approved", True),
+            }})
+            if not existing.get("password_hash"):
+                pw = ADMIN_PASSWORD if d["role"] == "super_admin" else DEFAULT_DEMO_PASSWORD
+                await db.users.update_one({"email": d["email"]}, {"$set": {"password_hash": hash_password(pw)}})
+            if d["role"] == "student" and not existing.get("student_id"):
+                real_stu = await db.students.find_one(
+                    {"institution_id": "inst_kmit", "department": "CSE"}, {"_id": 0}
+                )
+                if real_stu:
+                    await db.users.update_one(
+                        {"email": d["email"]},
+                        {"$set": {"student_id": real_stu["student_id"]}},
+                    )
+                    await db.students.update_one(
+                        {"student_id": real_stu["student_id"]},
+                        {"$set": {"name": d["name"], "email": d["email"]}},
+                    )
+
+    if not await db.institutions.find_one({"institution_id": "inst_vasavi_pending"}):
+        await db.institutions.insert_one({
+            "institution_id": "inst_vasavi_pending",
+            "name": "Vasavi College of Engineering",
+            "short_name": "VCE",
+            "type": "Engineering",
+            "city": "Hyderabad", "state": "Telangana",
+            "affiliated_university": "Osmania University",
+            "departments": ["CSE", "ECE", "IT"],
+            "approved": False,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+
+
 @app.on_event("startup")
 async def _startup():
-    for collection_name in CORE_COLLECTIONS:
-        await db[collection_name].create_index("_id")
+    await _ensure_database()
+    if MONGO_URL:
+        await _ensure_production_minimums()
+        return
     await db.users.create_index("email", unique=True)
     await db.user_sessions.create_index("jwt_id", unique=True)
     await db.audit_logs.create_index("created_at")
